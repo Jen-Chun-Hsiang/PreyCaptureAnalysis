@@ -1,0 +1,333 @@
+close all; clear; clc;
+%%
+data_sets = {'e100724', 'f100724', 'a101224', 'b101224',  'c101224',  'd101224', 'e101224',...
+             'b101424', 'c101424', 'd101424', 'e101424',  'a101624',  'b101624', 'd101624', 'e101624',...
+             'b101924', 'c101924', 'd101924', 'e101924',  'b103124',  'e103124', 'a110424', 'b110424',...
+             'c110424', 'd110424', 'e110424', 'f110424',  'g110424',  'a110924', 'b110924', 'c110924',...
+             'a111224'};
+cell_type = {'OFF',      'OFF',    'OFF',      'ON',       'OFF',     'ON',      'OFF',...
+             'OFF',      'OFF',    'ON',       'ON',       'ON',      'ON',      'ON',       'ON',...
+             'ON',       'OFF',    'OFF',      'OFF',      'ON',      'OFF',     'ON',       'ON',...
+             'ON',       'ON',     'OFF',      'ON',       'OFF',     'ON',      'OFF',      'OFF',...
+             'ON'};
+location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',   'Nasal',...
+             'Temporal', 'Temporal','Temporal','Temporal', 'Nasal',   'Nasal',   'Nasal',    'Nasal',...
+             'Nasal',    'Nasal',   'Nasal',   'Nasal',    'Temporal','Temporal','Temporal', 'Temporal',...
+             'Temporal', 'Temporal','Temporal','Temporal', 'Temporal','Temporal','Temporal', 'Temporal',...
+             'Temporal',...
+             };
+
+is_normalized_tf = 1;
+%%
+clear Data
+num_set = length(data_sets);
+folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite';
+for i = 1:num_set
+    file_name = sprintf('%s.mat', data_sets{i});
+    Data{i} = load(fullfile(folder_name, file_name), 'stdSTA', 'tRF');
+end
+%%
+Fz = 100;
+WinT = [-0.5 0];
+t = WinT(1):1/Fz:WinT(end);
+%% digitalize parameters for cell comparison
+numeric_parts = regexp(data_sets, '\d+', 'match');
+numeric_values = cellfun(@str2double, numeric_parts);
+[date_value, ~, date_ids] = unique(numeric_values);
+location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
+cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
+%%
+keyboard;
+%% Skip process to section [AA] for loading data
+%% show difference in temporal filter
+ct = t(2:end);
+Trace = nan(num_set,  length(ct));
+
+figure; hold on
+for k = 1:num_set
+    csig = Data{k}.tRF;
+    if is_normalized_tf
+        csig = csig./max(abs(csig));
+    end
+    OptimizedParams = GaussianTemporalFilter(csig');
+    if k == 1
+        Gauss_TF_est = nan(num_set, length(OptimizedParams));
+    end
+    Gauss_TF_est(k, :) = OptimizedParams;
+    switch lower(cell_type{k})
+        case 'on'
+            plot(ct, csig, 'Color', [247, 224, 12]/255);
+        case 'off'
+            plot(ct, csig, 'Color', 0.4*ones(1, 3));
+    end
+    Trace(k, :) = csig;
+end
+h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==1, :), 1)), 'Color', [245 182 66]/255, 'LineWidth', 2);
+h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==0, :), 1)), 'Color', 0*ones(1, 3), 'LineWidth', 2);
+xlabel('Time (s)');
+xticks(-0.5:0.25:0)
+xticklabels({'-0.5', '0.25', '0'});
+if is_normalized_tf
+    yticks(-1:0.5:1)
+    yticklabels({'-1', '', '0', '', '1'});
+else
+    yticks(-100:50:100)
+    yticklabels({'-100', '', '0', '', '100'});
+end
+ylabel('Average stimulus value');
+legend([h1, h2], 'ON', 'OFF');
+
+%%
+figure; hold on
+%%
+x = 1:length(csig);
+OptW = median(Gauss_TF_est(cell_type_numeric==0 & location_type_numeric==1, :), 1);
+tf = (gaussmf(x, [OptW(1) OptW(3)])*OptW(5)-gaussmf(x, [OptW(2) OptW(4)])*OptW(6))+OptW(7);
+
+plot(tf);
+%%
+keyboard
+%%
+isON = Gauss_TF_est(:, 3) >= Gauss_TF_est(:, 4);
+isON_check = Gauss_TF_est(:, 5) > Gauss_TF_est(:, 6); % more accurate
+assert(sum(isON-isON_check)== 0);
+%%
+TF_time2peak = nan(num_set, 1);
+TF_width = nan(num_set, 1);
+TF_biphasic_peaks = nan(num_set, 1);
+TF_biphasic_stregth = nan(num_set, 1);
+hwith_thr = 0.5;
+nt = size(Trace, 2);
+for i = 1:num_set
+    csig = Trace(i, :);
+    csig = interp1(linspace(0, 1, nt), csig, linspace(0, 1, 1000), 'cubic');
+    maxv = max(csig);
+    minv = abs(min(csig));
+    if isON(i)
+        TF_time2peak(i) = (50-Gauss_TF_est(i, 3))*(1/Fz)*1000;
+        csig = csig > hwith_thr;
+        TF_biphasic_peaks(i) = 1-2*abs(maxv/(maxv+minv)-0.5);
+        TF_biphasic_stregth(i) = Gauss_TF_est(i, 6)./Gauss_TF_est(i, 5);
+    else
+        TF_time2peak(i) = (50-Gauss_TF_est(i, 4))*(1/Fz)*1000;
+        csig = csig < -hwith_thr;
+        TF_biphasic_peaks(i) = 1-2*abs(minv/(maxv+minv)-0.5);
+        TF_biphasic_stregth(i) = Gauss_TF_est(i, 5)./Gauss_TF_est(i, 6);
+    end
+    TF_width(i) = sum(csig)*(1/Fz)*nt;
+end
+
+%% 
+Disp_Type = 'ON';
+cell_type_id = strcmpi(Disp_Type, 'ON');
+type_ids = find(cell_type_numeric == cell_type_id)';
+biphase = Gauss_TF_est(type_ids, 5:6);
+if cell_type_id == 1
+    biphase = biphase(:, 2)./biphase(:, 1);
+else
+    biphase = biphase(:, 1)./biphase(:, 2);
+end
+colors = parula(256);
+color_ids = round(((biphase-min(biphase))*255/range(biphase))+1);
+figure; 
+subplot(1, 2, 1); hold on
+for k = 1:numel(type_ids)
+    csig = Data{type_ids(k)}.tRF;
+    if is_normalized_tf
+        csig = csig./max(abs(csig));
+    end
+    plot(ct, csig, 'Color', colors(color_ids(k), :));
+end
+
+subplot(1, 2, 2); hold on
+for k = 1:num_set
+    if strcmpi(cell_type{k}, Disp_Type)
+        csig = Data{k}.tRF;
+        if is_normalized_tf
+            csig = csig./max(abs(csig));
+        end
+        switch lower(location{k})
+            case 'temporal'
+                plot(ct, csig, 'Color', [66 182 245]/255);
+            case 'nasal'
+                plot(ct, csig, 'Color', [247 153 205]/255);
+        end
+    end
+end
+h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==cell_type_id & location_type_numeric == 1, :), 1)),...
+    'Color', [27 59 242]/255, 'LineWidth', 2);
+h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==cell_type_id & location_type_numeric == 0, :), 1)),...
+    'Color', [242 27 145]/255, 'LineWidth', 2);
+xlabel('Time (s)');
+xticks(-0.5:0.25:0)
+xticklabels({'-0.5', '0.25', '0'});
+if is_normalized_tf
+    yticks(-1:0.5:1)
+    yticklabels({'-1', '', '0', '', '1'});
+else
+    yticks(-100:50:100)
+    yticklabels({'-100', '', '0', '', '100'});
+end
+ylabel('Average stimulus value');
+legend([h1, h2], 'Temporal', 'Nasal')
+%%
+locs = location_type_numeric(type_ids);
+x = biphase(locs==0);
+y = biphase(locs==1);
+% p = ranksum(biphase(locs==0),biphase(locs==1));
+[~, p] = ttest2(x, y)
+%%
+keyboard
+%% Get Spatial Receptive Field
+num_gauss = 1;
+image = Data{1}.stdSTA';
+initial_params = [size(image, 1)/2, size(image, 2)/2, 50, 50, 0, 0.1, 1, 200, 200, 0.1];
+initial_params = repmat(initial_params, num_gauss, 1);
+initial_params(:, 1:2) = initial_params(:, 1:2) + 10*rand(num_gauss, 2);
+initial_params = initial_params';
+options.MaxFunEvals = 600*length(initial_params(:));
+for k = 1:num_set
+    image = Data{k}.stdSTA';
+    objective_function = @(params) 1-corr(image(:), reshape(gaussian_multi(params, image, num_gauss), [], 1));  
+    optimal_params = fminsearch(objective_function, initial_params, options);
+    if k == 1
+        gauss_est = nan(num_set, length(optimal_params));
+    end
+    gauss_est(k, :) = optimal_params;
+    clc
+    fprintf('Gaussian fitting... (%d/%d)', k, num_set);
+end
+
+%% [AA] save data given a time stamp of processing
+process_version = 'GaussianFitting_processed_123024_1.mat';
+
+%%
+% save(fullfile(folder_name, process_version), 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace',...
+%     'gauss_est')
+%%
+split_est_parameter_by_celltype
+%%
+load(fullfile(folder_name, process_version))
+%%
+elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
+% avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
+avg_rad = sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
+surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
+%%
+Colors = lines(6); %
+clear Ids
+Ids{1} = cell_type_numeric == 1;
+Ids{2} = cell_type_numeric == 0;
+Ids{3} = cell_type_numeric == 1 & location_type_numeric == 1;
+Ids{4} = cell_type_numeric == 1 & location_type_numeric == 0;
+Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
+Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
+barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
+num_n = cellfun(@sum, Ids);
+eval_target = 'radius';
+switch lower(eval_target)
+    case 'radius'
+        values = avg_rad;
+        ylims = [60 160];
+        ylab = 'RF radius';
+    case 'ellipse'
+        values = elipse_ratio;
+        ylims = [0.6 1];
+        ylab = 'RF ellipse ratio';
+    case 'surround_center'
+        values = surround_center;
+        ylims = [0 0.05];
+        ylab = 'Surround center ratio';
+    case 'tftime2peak'
+        values = TF_time2peak;
+        ylims = [40 100];
+        ylab = 'Time to peak(ms)';
+    case 'tfwidth'
+        values = TF_width;
+        ylims = [30 70];
+        ylab = 'Half width (ms)';
+    case 'tfbiphasicpeaks'
+        values = TF_biphasic_peaks;
+        ylims = [0.1 0.6];
+        ylab = 'Biphasic index (peaks)';
+    case 'tfbiphasicstregth'
+        values = TF_biphasic_stregth;
+        ylims = [0 0.35];
+        ylab = 'Biphasic index (strength)';
+
+end
+Davg = [];
+Dsem = [];
+clear xticlab
+for i = 1:6
+    Davg = [Davg mean(values(Ids{i}))];
+    Dsem = [Dsem std(values(Ids{i}))/sqrt(num_n(i))];
+    xticlab{i} = sprintf('%s (n=%d)', barlabels{i}, num_n(i));
+end
+box off
+%%
+Colors = [0.3*ones(1, 3);
+          0.6*ones(1, 3);
+          [27 59 242]/255;
+          [242 27 145]/255;
+          [27 59 242]/255;
+          [242 27 145]/255];
+selection = 3:6;
+figure; hold on
+b = bar(selection, Davg(selection));
+b.FaceColor = 'flat';
+b.EdgeColor = 'w';
+b.CData = Colors(selection, :);
+errorbar(selection, Davg(selection), Dsem(selection), 'vertical', '|k', 'CapSize', 0');
+xticks(selection)
+xticklabels(xticlab(selection))
+if ~isempty(ylims)
+    ylim(ylims);
+    ylabel(ylab);
+end
+xlim([2.5 6.5]);
+yticks(60:30:160);
+yticklabels({'60', '90', '120', '150'});
+%%
+Colors = parula(num_date);
+eval_target = 'radius';
+num_date = length(date_value);
+date_id_array = nan(num_set, num_date);
+for i = 1:num_date
+    date_id_array(:, i) = date_ids == i;
+end
+num_n = sum(date_id_array, 1);
+switch lower(eval_target)
+    case 'radius'
+        values = avg_rad;
+        ylims = [50 120];
+        ylab = 'RF radius';
+    case 'ellipse'
+        values = elipse_ratio;
+        ylims = [0.6 1];
+        ylab = 'RF ellipse ratio';
+    case 'surround_center'
+        values = surround_center;
+        ylims = [0 0.05];
+        ylab = 'Surround center ratio';
+end
+Davg = [];
+Dsem = [];
+clear xticlab
+for i = 1:num_date
+    Davg = [Davg mean(values(date_id_array(:, i)==1))];
+    Dsem = [Dsem std(values(date_id_array(:, i)==1))/sqrt(num_n(i))];
+    xticlab{i} = sprintf('%s (n=%d)', num2str(date_value(i)), num_n(i));
+end
+box off
+figure; hold on
+b = bar(1:num_date, Davg);
+b.FaceColor = 'flat';
+b.EdgeColor = 'w';
+b.CData = Colors(1:num_date, :);
+errorbar(1:num_date, Davg, Dsem, 'vertical', '|k', 'CapSize', 0');
+xticks(1:num_date)
+xticklabels(xticlab)
+ylim(ylims);
+ylabel(ylab);
+

@@ -1,0 +1,13 @@
+function img = BCmodifiedImg(img, thr, blurry_length)
+bcr = max(img, thr*ones(size(img)));
+maxv = max(bcr(:));
+minv = min(bcr(:));
+extend_ratio = (1-minv)/(maxv-minv);
+bcr = bcr*extend_ratio+minv*(1-extend_ratio);
+bcrb = imgaussfilt(bcr, blurry_length);
+bcrba = bcrb+img;
+maxv = max(bcrba(:));
+minv = min(bcrba(:));
+extend_ratio = (max(img(:))-min(img(:)))/(maxv-minv);
+bcrba = bcrba*extend_ratio;
+img = bcrba-min(bcrba(:))+min(img(:));
