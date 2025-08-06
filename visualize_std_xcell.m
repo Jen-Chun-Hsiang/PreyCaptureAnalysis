@@ -6,8 +6,10 @@ compare_type = 'location';          % Options: '', 'cell', 'location'
 use_same_scale = false;      % Set to false to scale each image individually
 
 numEntries = length(Data);
+
 images = {};
 titles = {};
+filtered_indices = [];
 minVal = inf;
 maxVal = -inf;
 
@@ -45,6 +47,7 @@ for i = 1:numEntries
     
     images{end+1} = cropped;
     titles{end+1} = sprintf('%s | %s | %s', data_sets{i}, cell_type{i}, location{i});
+    filtered_indices(end+1) = i;
     minVal = min(minVal, min(cropped(:)));
     maxVal = max(maxVal, max(cropped(:)));
 end
@@ -55,24 +58,23 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     rightImages = {};
     leftTitles = {};
     rightTitles = {};
-    for i = 1:length(images)
+    for idx = 1:length(images)
+        orig_i = filtered_indices(idx);
         if strcmp(compare_type, 'cell')
-            ct = sscanf(titles{i}, 'Cell:%d');
-            if ct == 0
-                leftImages{end+1} = images{i};
-                leftTitles{end+1} = titles{i};
+            if cell_type_numeric(orig_i) == 0
+                leftImages{end+1} = images{idx};
+                leftTitles{end+1} = titles{idx};
             else
-                rightImages{end+1} = images{i};
-                rightTitles{end+1} = titles{i};
+                rightImages{end+1} = images{idx};
+                rightTitles{end+1} = titles{idx};
             end
         else
-            lt = sscanf(titles{i}, 'Cell:%*d Loc:%d');
-            if lt == 0
-                leftImages{end+1} = images{i};
-                leftTitles{end+1} = titles{i};
+            if location_type_numeric(orig_i) == 0
+                leftImages{end+1} = images{idx};
+                leftTitles{end+1} = titles{idx};
             else
-                rightImages{end+1} = images{i};
-                rightTitles{end+1} = titles{i};
+                rightImages{end+1} = images{idx};
+                rightTitles{end+1} = titles{idx};
             end
         end
     end

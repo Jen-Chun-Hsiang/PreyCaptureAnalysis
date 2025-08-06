@@ -18,6 +18,44 @@ location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',  
              };
 
 is_normalized_tf = 1;
+%% Check files
+% Load Excel sheet
+excelFile = 'PatchRecordingAlphaRGCs_PreyCapture.xlsx'; % <-- change to your actual file name
+T = readtable(excelFile, 'Sheet', 'Sheet1');
+
+% Convert Excel date to string for matching
+%excelDayStr = cellfun(@(x) datestr(x, 'mmddyy'), T.Day, 'UniformOutput', false);
+excelDayStr = arrayfun(@(x) datestr(x, 'mmddyy'), T.Day, 'UniformOutput', false);
+
+for i = 1:length(data_sets)
+    fprintf('Checking %s...%d \n', data_sets{i}, i);
+    ds = data_sets{i};
+    % Extract letter and date from data_sets
+    cellLetter = ds(1);
+    dateStr = ds(2:end);
+    
+    % Find matching row in Excel
+    matchIdx = find(strcmp(excelDayStr, dateStr) & strcmp(T.Cell, cellLetter));
+    if isempty(matchIdx)
+        fprintf('No match for %s in Excel sheet!\n', ds);
+        error('Stopping due to missing match.');
+    end
+    
+    % Check cell_type
+    excelType = T.('ON_OFF'){matchIdx};
+    if ~strcmpi(cell_type{i}, excelType)
+        error(sprintf('Type mismatch for %s: data_sets=%s, Excel=%s\n', ds, cell_type{i}, excelType));
+    end
+    
+    % Check location
+    excelLoc = T.TN_axis{matchIdx};
+    expectedLoc = location{i};
+    if (strcmpi(expectedLoc, 'Temporal') && ~strcmpi(excelLoc, 'T')) || ...
+       (strcmpi(expectedLoc, 'Nasal') && ~strcmpi(excelLoc, 'N'))
+        error(printf('Location mismatch for %s: data_sets=%s, Excel=%s\n', ds, expectedLoc, excelLoc));
+    end
+    fprintf('Checked %s: Type=%s, Location=%s PASS \n', ds, excelType, excelLoc);
+end
 %%
 clear Data
 num_set = length(data_sets);
