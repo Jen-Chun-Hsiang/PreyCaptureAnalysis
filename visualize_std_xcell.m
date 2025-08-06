@@ -80,36 +80,40 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     end
     
     % Determine layout
-    maxLen = max(length(leftImages), length(rightImages));
+    leftCols = 2;
+    rightCols = 2;
+    totalCols = leftCols + rightCols; % 4 columns
+    maxRows = max(ceil(length(leftImages)/leftCols), ceil(length(rightImages)/rightCols));
     figure;
-    for i = 1:maxLen
-        % Left column
-        if i <= length(leftImages)
-            subplot(maxLen, 2, (i - 1) * 2 + 1);
-            if use_same_scale
-                imagesc(leftImages{i}, [minVal, maxVal]);
-            else
-                imagesc(leftImages{i});
-            end
-            axis image off;
-            title(leftTitles{i});
+    % Plot left images (columns 1-2)
+    for i = 1:length(leftImages)
+        row = ceil(i/leftCols);
+        col = mod(i-1, leftCols) + 1;
+        subplot(maxRows, totalCols, (row-1)*totalCols + col);
+        if use_same_scale
+            imagesc(leftImages{i}, [minVal, maxVal]);
+        else
+            imagesc(leftImages{i});
         end
-        % Right column
-        if i <= length(rightImages)
-            subplot(maxLen, 2, (i - 1) * 2 + 2);
-            if use_same_scale
-                imagesc(rightImages{i}, [minVal, maxVal]);
-            else
-                imagesc(rightImages{i});
-            end
-            axis image off;
-            title(rightTitles{i});
-        end
+        axis image off;
+        title(leftTitles{i});
     end
-    
+    % Plot right images (columns 3-4)
+    for i = 1:length(rightImages)
+        row = ceil(i/rightCols);
+        col = mod(i-1, rightCols) + 1 + leftCols; % shift to columns 3-4
+        subplot(maxRows, totalCols, (row-1)*totalCols + col);
+        if use_same_scale
+            imagesc(rightImages{i}, [minVal, maxVal]);
+        else
+            imagesc(rightImages{i});
+        end
+        axis image off;
+        title(rightTitles{i});
+    end
     sgtitle(sprintf('Zoomed x%d Comparison by %s Type', zoom_in, compare_type));
     colormap('jet');
-    colorbar;
+    % colorbar;
 
 else
     % No comparison — regular grid layout
