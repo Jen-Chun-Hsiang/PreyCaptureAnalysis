@@ -237,16 +237,39 @@ for k = 1:num_set
 end
 
 %% [AA] save data given a time stamp of processing
+
 process_version = 'GaussianFitting_processed_123024_1.mat';
 
-%%
-% save(fullfile(folder_name, process_version), 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace',...
-%     'gauss_est')
-%%
+% Check if processed file exists before running spatial receptive field fitting
+processedFile = fullfile(folder_name, process_version);
+if exist(processedFile, 'file')
+    disp('Processed file found. Loading instead of rerunning fitting.');
+    load(processedFile);
+else
+    % Run spatial receptive field fitting
+    num_gauss = 1;
+    image = Data{1}.stdSTA';
+    initial_params = [size(image, 1)/2, size(image, 2)/2, 50, 50, 0, 0.1, 1, 200, 200, 0.1];
+    initial_params = repmat(initial_params, num_gauss, 1);
+    initial_params(:, 1:2) = initial_params(:, 1:2) + 10*rand(num_gauss, 2);
+    initial_params = initial_params';
+    options.MaxFunEvals = 600*length(initial_params(:));
+    for k = 1:num_set
+        image = Data{k}.stdSTA';
+        objective_function = @(params) 1-corr(image(:), reshape(gaussian_multi(params, image, num_gauss), [], 1));  
+        optimal_params = fminsearch(objective_function, initial_params, options);
+        if k == 1
+            gauss_est = nan(num_set, length(optimal_params));
+        end
+        gauss_est(k, :) = optimal_params;
+        clc
+        fprintf('Gaussian fitting... (%d/%d)', k, num_set);
+    end
+    save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace');
+end
+
 split_est_parameter_by_celltype
-%%
-load(fullfile(folder_name, process_version))
-%%
+
 elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
 % avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
 avg_rad = sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
