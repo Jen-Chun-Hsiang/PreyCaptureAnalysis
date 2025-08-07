@@ -18,6 +18,10 @@ location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',  
              };
 
 is_normalized_tf = 1;
+save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
+if ~exist(save_folder, 'dir')
+    mkdir(save_folder);
+end
 %% Check files
 % Load Excel sheet
 excelFile = 'PatchRecordingAlphaRGCs_PreyCapture.xlsx'; % <-- change to your actual file name
@@ -216,25 +220,6 @@ y = biphase(locs==1);
 [~, p] = ttest2(x, y)
 %%
 keyboard
-%% Get Spatial Receptive Field
-num_gauss = 1;
-image = Data{1}.stdSTA';
-initial_params = [size(image, 1)/2, size(image, 2)/2, 50, 50, 0, 0.1, 1, 200, 200, 0.1];
-initial_params = repmat(initial_params, num_gauss, 1);
-initial_params(:, 1:2) = initial_params(:, 1:2) + 10*rand(num_gauss, 2);
-initial_params = initial_params';
-options.MaxFunEvals = 600*length(initial_params(:));
-for k = 1:num_set
-    image = Data{k}.stdSTA';
-    objective_function = @(params) 1-corr(image(:), reshape(gaussian_multi(params, image, num_gauss), [], 1));  
-    optimal_params = fminsearch(objective_function, initial_params, options);
-    if k == 1
-        gauss_est = nan(num_set, length(optimal_params));
-    end
-    gauss_est(k, :) = optimal_params;
-    clc
-    fprintf('Gaussian fitting... (%d/%d)', k, num_set);
-end
 
 %% [AA] save data given a time stamp of processing
 
@@ -272,11 +257,11 @@ split_est_parameter_by_celltype
 
 elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
 % avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
-avg_rad = sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
+avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
 surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
 %%
 Colors = lines(6); %
-clear Ids
+clear Ids ylims ylab values
 Ids{1} = cell_type_numeric == 1;
 Ids{2} = cell_type_numeric == 0;
 Ids{3} = cell_type_numeric == 1 & location_type_numeric == 1;
@@ -285,15 +270,17 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'radius';
+eval_target = 'ellipse';
 switch lower(eval_target)
-    case 'radius'
+    case 'diameter'
         values = avg_rad;
-        ylims = [60 160];
-        ylab = 'RF radius';
+        ylims = [0 400];
+        ytick = 0:200:400;
+        ylab = 'RF diameter';
     case 'ellipse'
         values = elipse_ratio;
-        ylims = [0.6 1];
+        ylims = [0 1];
+        ytick = 0:0.5:1;
         ylab = 'RF ellipse ratio';
     case 'surround_center'
         values = surround_center;
@@ -329,10 +316,10 @@ box off
 %%
 Colors = [0.3*ones(1, 3);
           0.6*ones(1, 3);
-          [27 59 242]/255;
-          [242 27 145]/255;
-          [27 59 242]/255;
-          [242 27 145]/255];
+          [240 120 0]/255;
+          [0 180 180]/255;
+          [150 80 0]/255;
+          [0 100 100]/255];
 selection = 3:6;
 figure; hold on
 b = bar(selection, Davg(selection));
@@ -340,15 +327,33 @@ b.FaceColor = 'flat';
 b.EdgeColor = 'w';
 b.CData = Colors(selection, :);
 errorbar(selection, Davg(selection), Dsem(selection), 'vertical', '|k', 'CapSize', 0');
+
+% Overlay individual data points as dots
+for i = 1:numel(selection)
+    idx = selection(i);
+    vals = values(Ids{idx});
+    x_jitter = (rand(size(vals))-0.5)*0.15; % small horizontal jitter
+    scatter(idx + x_jitter, vals, 40, Colors(idx, :), 'MarkerEdgeColor', 0.2*ones(1, 3));
+end
+
 xticks(selection)
 xticklabels(xticlab(selection))
+clear y_ticklabels
 if ~isempty(ylims)
     ylim(ylims);
     ylabel(ylab);
+    yticks(ytick);
+    for i = 1:length(ytick)
+        y_ticklabels{i} = num2str(ytick(i));
+    end
+    yticklabels(y_ticklabels);
 end
 xlim([2.5 6.5]);
-yticks(60:30:160);
-yticklabels({'60', '90', '120', '150'});
+%%
+save_file_name = fullfile(save_folder, sprintf('BarPlot_RF%s_%s', eval_target, process_version(1:end-4)));
+print(gcf, save_file_name, '-depsc', '-painters'); % EPS format
+print(gcf, save_file_name, '-dpng', '-r300'); % PNG, 600 dpi
+
 %%
 Colors = parula(num_date);
 eval_target = 'radius';
