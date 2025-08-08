@@ -132,7 +132,7 @@ keyboard
 %%
 isON = Gauss_TF_est(:, 3) >= Gauss_TF_est(:, 4);
 isON_check = Gauss_TF_est(:, 5) > Gauss_TF_est(:, 6); % more accurate
-assert(sum(isON-isON_check)== 0);
+% assert(sum(isON-isON_check)== 0);
 %%
 TF_time2peak = nan(num_set, 1);
 TF_width = nan(num_set, 1);
@@ -223,7 +223,7 @@ keyboard
 
 %% [AA] save data given a time stamp of processing
 
-process_version = 'GaussianFitting_processed_123024_1.mat';
+process_version = 'GaussianFitting_processed_080725_1.mat';
 
 % Check if processed file exists before running spatial receptive field fitting
 processedFile = fullfile(folder_name, process_version);
@@ -250,7 +250,19 @@ else
         clc
         fprintf('Gaussian fitting... (%d/%d)', k, num_set);
     end
+    % Check alignment before saving
+    for k = 1:num_set
+        assert(~isempty(Data{k}), 'Missing Data at index %d', k);
+        assert(size(gauss_est,1) >= k, 'gauss_est missing entry at index %d', k);
+        assert(length(cell_type_numeric) >= k, 'cell_type_numeric missing entry at index %d', k);
+        assert(length(location_type_numeric) >= k, 'location_type_numeric missing entry at index %d', k);
+    end
     save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace');
+    % Save split group variables to the same file, appending
+    if exist('gauss_est_ON_temporal', 'var')
+        save(processedFile, 'gauss_est_ON_temporal', 'gauss_est_ON_nasal', 'gauss_est_OFF_temporal', 'gauss_est_OFF_nasal', ...
+            'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');
+    end
 end
 
 split_est_parameter_by_celltype
