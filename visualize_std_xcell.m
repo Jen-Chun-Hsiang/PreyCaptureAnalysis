@@ -1,9 +1,10 @@
 % Parameters
 zoom_in = 4;
-show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
-show_location_type = [0];    % Set to 0 or 1 to filter, or [] to ignore
+show_cell_type = [1];        % Set to 0 or 1 to filter, or [] to ignore
+show_location_type = [1];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';          % Options: '', 'cell', 'location'
 use_same_scale = false;      % Set to false to scale each image individually
+is_last_image_centered = true; % If true, the last image will be the first image with all ellipses overlaid
 
 numEntries = length(Data);
 
@@ -276,8 +277,13 @@ else
         y_ellipse = 2*sigma_y * sin(t_ellipse);
         R = [cos(theta), -sin(theta); sin(theta), cos(theta)];
         ellipse_coords = R * [x_ellipse; y_ellipse];
-        x_plot = ellipse_coords(1, :) + (x_mean - center_w + crop_center_w);
-        y_plot = ellipse_coords(2, :) + (y_mean - center_h + crop_center_h);
+        if is_last_image_centered
+            x_plot = ellipse_coords(1, :) + crop_center_w;
+            y_plot = ellipse_coords(2, :) + crop_center_h;
+        else
+            x_plot = ellipse_coords(1, :) + (x_mean - center_w + crop_center_w);
+            y_plot = ellipse_coords(2, :) + (y_mean - center_h + crop_center_h);
+        end
         plot(x_plot, y_plot, 'b', 'LineWidth', 2);
     end
     hold off;
