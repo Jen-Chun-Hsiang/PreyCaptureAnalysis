@@ -271,6 +271,8 @@ elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
 % avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
 avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
 surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
+%% Get area size 
+FindThreshold_MeanMinusKStd
 %%
 Colors = lines(6); %
 clear Ids ylims ylab values
@@ -282,8 +284,13 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'ellipse';
+eval_target = 'area';
 switch lower(eval_target)
+    case 'area'
+        values = rf_pixels*4.375^2; % in um^2
+        % ylims = [0 1e5];
+        % ytick = 0:5e4:1e5;
+        ylab = 'RF area (\mum^2)';
     case 'diameter'
         values = avg_rad;
         ylims = [0 400];
@@ -328,10 +335,10 @@ box off
 %%
 Colors = [0.3*ones(1, 3);
           0.6*ones(1, 3);
-          [240 120 0]/255;
-          [0 180 180]/255;
-          [150 80 0]/255;
-          [0 100 100]/255];
+          [180 0 180]/255;
+          [120  0 120]/255;
+          [0  180 0]/255;
+          [0 120 0]/255];
 selection = 3:6;
 figure; hold on
 b = bar(selection, Davg(selection));
@@ -351,14 +358,16 @@ end
 xticks(selection)
 xticklabels(xticlab(selection))
 clear y_ticklabels
-if ~isempty(ylims)
-    ylim(ylims);
-    ylabel(ylab);
-    yticks(ytick);
-    for i = 1:length(ytick)
-        y_ticklabels{i} = num2str(ytick(i));
+if exist('ylims', 'var')
+    if ~isempty(ylims)
+        ylim(ylims);
+        ylabel(ylab);
+        yticks(ytick);
+        for i = 1:length(ytick)
+            y_ticklabels{i} = num2str(ytick(i));
+        end
+        yticklabels(y_ticklabels);
     end
-    yticklabels(y_ticklabels);
 end
 xlim([2.5 6.5]);
 %%
