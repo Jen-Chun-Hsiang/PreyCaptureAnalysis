@@ -130,8 +130,9 @@ plot(tf);
 %%
 keyboard
 %%
-isON = Gauss_TF_est(:, 3) >= Gauss_TF_est(:, 4);
-isON_check = Gauss_TF_est(:, 5) > Gauss_TF_est(:, 6); % more accurate
+isON = cell_type_numeric == 1;
+% isON = Gauss_TF_est(:, 3) >= Gauss_TF_est(:, 4);
+% isON_check = Gauss_TF_est(:, 5) > Gauss_TF_est(:, 6); % more accurate
 % assert(sum(isON-isON_check)== 0);
 %%
 TF_time2peak = nan(num_set, 1);
@@ -141,22 +142,28 @@ TF_biphasic_stregth = nan(num_set, 1);
 hwith_thr = 0.5;
 nt = size(Trace, 2);
 for i = 1:num_set
-    csig = Trace(i, :);
-    csig = interp1(linspace(0, 1, nt), csig, linspace(0, 1, 1000), 'cubic');
-    maxv = max(csig);
-    minv = abs(min(csig));
+    csig = Data{i}.tRF(:)';
+    % Interpolate for finer resolution
+    csig_interp = interp1(linspace(0, 1, nt), csig, linspace(0, 1, 1000), 'cubic');
+    t_interp = linspace(WinT(1), WinT(end), 1000);
     if isON(i)
-        TF_time2peak(i) = (50-Gauss_TF_est(i, 3))*(1/Fz)*1000;
-        csig = csig > hwith_thr;
+        [~, peak_idx] = max(csig_interp);
+    else
+        [~, peak_idx] = min(csig_interp);
+    end
+    TF_time2peak(i) = (t_interp(peak_idx))*1000; % ms
+    maxv = max(csig_interp);
+    minv = abs(min(csig_interp));
+    if isON(i)
+        csig_thr = csig_interp > hwith_thr;
         TF_biphasic_peaks(i) = 1-2*abs(maxv/(maxv+minv)-0.5);
         TF_biphasic_stregth(i) = Gauss_TF_est(i, 6)./Gauss_TF_est(i, 5);
     else
-        TF_time2peak(i) = (50-Gauss_TF_est(i, 4))*(1/Fz)*1000;
-        csig = csig < -hwith_thr;
+        csig_thr = csig_interp < -hwith_thr;
         TF_biphasic_peaks(i) = 1-2*abs(minv/(maxv+minv)-0.5);
         TF_biphasic_stregth(i) = Gauss_TF_est(i, 5)./Gauss_TF_est(i, 6);
     end
-    TF_width(i) = sum(csig)*(1/Fz)*nt;
+    TF_width(i) = sum(csig_thr)*(1/Fz)*nt;
 end
 
 %% 
@@ -284,7 +291,7 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'area';
+eval_target = 'tfbiphasicpeaks';
 switch lower(eval_target)
     case 'area'
         values = rf_pixels*4.375^2; % in um^2
@@ -306,20 +313,22 @@ switch lower(eval_target)
         ylims = [0 0.05];
         ylab = 'Surround center ratio';
     case 'tftime2peak'
-        values = TF_time2peak;
-        ylims = [40 100];
-        ylab = 'Time to peak(ms)';
+        values = -TF_time2peak;
+        ylims = [0 120];
+        ytick = 0:60:120;
+        ylab = 'Time to peak(ms) abs';
     case 'tfwidth'
         values = TF_width;
         ylims = [30 70];
         ylab = 'Half width (ms)';
     case 'tfbiphasicpeaks'
         values = TF_biphasic_peaks;
-        ylims = [0.1 0.6];
+        ylims = [0 0.9];
+        ytick = 0:0.3:0.9;
         ylab = 'Biphasic index (peaks)';
     case 'tfbiphasicstregth'
         values = TF_biphasic_stregth;
-        ylims = [0 0.35];
+        % ylims = [0 0.35];
         ylab = 'Biphasic index (strength)';
 
 end
@@ -352,7 +361,7 @@ for i = 1:numel(selection)
     idx = selection(i);
     vals = values(Ids{idx});
     x_jitter = (rand(size(vals))-0.5)*0.15; % small horizontal jitter
-    scatter(idx + x_jitter, vals, 40, Colors(idx, :), 'MarkerEdgeColor', 0.2*ones(1, 3));
+    scatter(idx + x_jitter, vals, 40, 0.3*ones(1, 3), 'filled');
 end
 
 xticks(selection)

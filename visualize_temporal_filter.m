@@ -1,5 +1,5 @@
 % Parameters
-show_cell_type = [1];        % Set to 0 or 1 to filter, or [] to ignore
+show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
 show_location_type = [0];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';           % Options: '', 'cell', 'location'
 normalize_peak = true;      % Set to true to normalize each filter to its peak (abs)
@@ -155,7 +155,8 @@ norm_str = '';
 if normalize_peak
     norm_str = '_normpeak';
 end
-
+keyboard
+%%
 save_file_name = fullfile(save_folder, sprintf('TemporalFilters%s%s%s_%s', filter_str, comp_str, norm_str, datestr(now,'yyyymmdd_HHMMSS')));
 print(gcf, save_file_name, '-depsc', '-painters');
 print(gcf, save_file_name, '-dpng', '-r300');
