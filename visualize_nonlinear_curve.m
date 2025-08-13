@@ -1,6 +1,6 @@
 % Parameters
-show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
-show_location_type = [0];    % Set to 0 or 1 to filter, or [] to ignore
+show_cell_type = [1];        % Set to 0 or 1 to filter, or [] to ignore
+show_location_type = [1];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';           % Options: '', 'cell', 'location'
 x_sample_range = -4:0.1:4;   % Should match the range used in NL_curves
 
@@ -29,7 +29,11 @@ for i = 1:numEntries
     if ~isempty(show_location_type) && lt ~= show_location_type
         continue;
     end
-    curves{end+1} = NL_curves(i, :);
+    if ct == 0
+        curves{end+1} = fliplr(NL_curves(i, :));
+    else
+        curves{end+1} = NL_curves(i, :);
+    end
     titles{end+1} = sprintf('%s | %s | %s', data_sets{i}, cell_type{i}, location{i});
     filtered_indices(end+1) = i;
 end
@@ -101,6 +105,7 @@ else
     xlabel('Generator signal'); ylabel('Firing rate');
     legend([titles, {'Average'}], 'Interpreter', 'none');
 end
+ylim([0 100])
 
 % Save figure
 filter_str = '';
