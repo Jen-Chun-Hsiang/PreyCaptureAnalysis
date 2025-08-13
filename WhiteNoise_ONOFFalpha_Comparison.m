@@ -69,6 +69,8 @@ for i = 1:num_set
     Data{i} = load(fullfile(folder_name, file_name), 'stdSTA', 'tRF');
 end
 %%
+GetWhiteNoise_Nonlinearity
+%%
 Fz = 100;
 WinT = [-0.5 0];
 t = WinT(1):1/Fz:WinT(end);
@@ -291,12 +293,12 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'tfbiphasicpeaks';
+eval_target = 'diameter';
 switch lower(eval_target)
     case 'area'
         values = rf_pixels*4.375^2; % in um^2
-        % ylims = [0 1e5];
-        % ytick = 0:5e4:1e5;
+        ylims = [0 1.2e5];
+        ytick = 0:6e4:1.2e5;
         ylab = 'RF area (\mum^2)';
     case 'diameter'
         values = avg_rad;
