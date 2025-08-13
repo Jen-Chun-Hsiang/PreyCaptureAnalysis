@@ -1,6 +1,6 @@
 % Parameters
-show_cell_type = [1];        % Set to 0 or 1 to filter, or [] to ignore
-show_location_type = [1];    % Set to 0 or 1 to filter, or [] to ignore
+show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
+show_location_type = [0];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';           % Options: '', 'cell', 'location'
 x_sample_range = -4:0.1:4;   % Should match the range used in NL_curves
 
@@ -77,6 +77,12 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     hold off;
     title(sprintf('Type 0 (%s)', compare_type));
     xlabel('Generator signal'); ylabel('Firing rate');
+    ylim([0 110]);
+    yticks(0:25:100);
+    yticklabels({'0','', '50', '', '100'});
+    xlim([-4 4]);
+    xticks(-4:4:4);
+    xticklabels({'-4','0','4'});
     subplot(1,2,2);
     hold on;
     for i = 1:length(rightCurves)
@@ -89,6 +95,12 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     hold off;
     title(sprintf('Type 1 (%s)', compare_type));
     xlabel('Generator signal'); ylabel('Firing rate');
+    ylim([0 110]);
+    yticks(0:25:100);
+    yticklabels({'0','', '50', '', '100'});
+    xlim([-4 4]);
+    xticks(-4:4:4);
+    xticklabels({'-4','0','4'});
     sgtitle(sprintf('Nonlinearity Comparison by %s Type', compare_type));
 else
     figure;
@@ -104,8 +116,13 @@ else
     title('Nonlinearity Curves');
     xlabel('Generator signal'); ylabel('Firing rate');
     legend([titles, {'Average'}], 'Interpreter', 'none');
+    ylim([0 110]);
+    yticks(0:25:100);
+    yticklabels({'0','', '50', '', '100'});
+    xlim([-4 4]);
+    xticks(-4:4:4);
+    xticklabels({'-4','0','4'});
 end
-ylim([0 100])
 
 % Save figure
 filter_str = '';
@@ -119,6 +136,8 @@ comp_str = '';
 if ~isempty(compare_type)
     comp_str = ['_', compare_type];
 end
+keyboard;
+%%
 save_file_name = fullfile(save_folder, sprintf('Nonlinearity%s%s_%s', filter_str, comp_str, datestr(now,'yyyymmdd_HHMMSS')));
 print(gcf, save_file_name, '-depsc', '-painters');
 print(gcf, save_file_name, '-dpng', '-r300');
