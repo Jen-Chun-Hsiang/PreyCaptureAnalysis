@@ -73,16 +73,17 @@ end
 Fz = 100;
 WinT = [-0.5 0];
 t = WinT(1):1/Fz:WinT(end);
-%%
-GetWhiteNoise_Nonlinearity
-visualize_nonlinear_curve
-keyboard;
 %% digitalize parameters for cell comparison
 numeric_parts = regexp(data_sets, '\d+', 'match');
 numeric_values = cellfun(@str2double, numeric_parts);
 [date_value, ~, date_ids] = unique(numeric_values);
 location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
 cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
+%%
+GetWhiteNoise_Nonlinearity
+visualize_nonlinear_curve
+keyboard;
+
 %%
 keyboard;
 %% Skip process to section [AA] for loading data
@@ -276,6 +277,9 @@ else
             'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');
     end
 end
+if exist('NL_curves', 'var')
+    save(processedFile, 'NL_curves', 'NL_params', '-append');
+end
 
 split_est_parameter_by_celltype
 
@@ -296,8 +300,18 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'diameter';
+eval_target = 'nl_slope';
 switch lower(eval_target)
+    case 'nl_baseline'
+        values = NL_params(:, 4);
+        ylims = [-0.2 25];
+        ytick = 0:10:20;
+        ylab = 'NL baseline';
+    case 'nl_slope'
+        values = NL_params(:, 1)./(NL_params(:, 3)*sqrt(2/pi));
+        ylims = [0 180];
+        ytick = 0:50:150;
+        ylab = 'NL slope';
     case 'area'
         values = rf_pixels*4.375^2; % in um^2
         ylims = [0 1.2e5];

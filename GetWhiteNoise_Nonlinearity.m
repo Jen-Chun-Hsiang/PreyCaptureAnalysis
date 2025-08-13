@@ -36,8 +36,10 @@ for j = 1:num_set
      % Toggle between fit functions
     switch fit_type
         case 'cdf'
-            fit_func = @(p, x) cdf_norm_scaled(x, p(3), p(2), p(1), p(4));
-            p0 = [50; 1; 1; 0.1];
+            fit_func = @(p, x) cdf_norm_scaled(x, p(1), p(2), p(3), p(4));
+            p0 = [50;    0.1;    1;  1.1;];
+            lb = [-Inf, -Inf,    0,    0];   % Lower bounds: sigma >= 0, offset >= 0
+            ub = [Inf,   Inf,  Inf,  Inf]; 
         case 'sigmoid'
             fit_func = @(p, x) scaledSigmoid(x, p(1), p(2), p(3), p(4));
             p0 = [30; -1; 1; 0.1];
@@ -46,7 +48,9 @@ for j = 1:num_set
     end
 
     % Perform the fitting
-    [pfit, ~] = lsqcurvefit(fit_func, p0, x(:)', y(:)');
+    [pfit, ~] = lsqcurvefit(fit_func, p0, x(:)', y(:)', lb, ub);
+    assert(pfit(3) >= 0, 'Fitting failed: sigma < 0');
+    assert(pfit(4) >= 0, 'Fitting failed: offset < 0');
 
     % Sample x from the provided range
     x_sample = x_sample_range;
@@ -56,8 +60,8 @@ for j = 1:num_set
     switch fit_type
         case 'cdf'
             % For cdf_norm_scaled: center at x = B (pfit(4)), y = A*normcdf((0-mu)/1,mu,1)+B
-            center_x = pfit(3)*abs(pfit(2))+pfit(4);
-            center_y = cdf_norm_scaled(center_x, pfit(3), pfit(2), pfit(1), pfit(4));
+            center_x = pfit(2);
+            center_y = cdf_norm_scaled(center_x, pfit(1), pfit(2), pfit(3), pfit(4));
         case 'sigmoid'
             % For scaledSigmoid: center at x = x0 (pfit(3)), y = L/2 + y0
             center_x = pfit(3);
