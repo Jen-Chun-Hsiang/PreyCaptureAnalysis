@@ -75,7 +75,8 @@ WinT = [-0.5 0];
 t = WinT(1):1/Fz:WinT(end);
 %%
 GetWhiteNoise_Nonlinearity
-
+visualize_nonlinear_curve
+keyboard;
 %% digitalize parameters for cell comparison
 numeric_parts = regexp(data_sets, '\d+', 'match');
 numeric_values = cellfun(@str2double, numeric_parts);

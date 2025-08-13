@@ -1,9 +1,11 @@
 num_data_per_bin = 200;
 fit_type = 'cdf'; % 'sigmoid' or 'cdf' to toggle fit function
 x_sample_range = -4:0.1:4; % Default range for sampling x
-
+is_wait_to_show = 1;
+close all
 figure(1); clf; hold on
 NL_params = nan(num_set, 6);
+NL_curves = nan(num_set, length(x_sample_range));
 for j = 1:num_set
     cla; hold on; % Clear axes and hold for each dataset
     file_name = sprintf('%s.mat', data_sets{j});
@@ -62,6 +64,7 @@ for j = 1:num_set
             center_y = pfit(1)/2 + pfit(4);
     end
     NL_params(j, :) = [pfit(:)' center_x center_y];
+    NL_curves(j, :) = y_fit_sample;
     % Plot
     scatter(x, y, 5, 'k', 'filled');
     plot(x_sample, y_fit_sample, 'r', 'LineWidth', 2);
@@ -73,5 +76,7 @@ for j = 1:num_set
     legend('Data', 'Fit', 'Center');
     %%
     fprintf('Fit type: %s, Center x: %.3f, Center y: %.3f\n', fit_type, center_x, center_y);
-    pause(2)
+    if is_wait_to_show
+        pause(2)
+    end
 end
