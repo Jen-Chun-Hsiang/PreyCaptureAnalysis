@@ -9,7 +9,7 @@ recording_sets = {'b103124',   'e103124', 'a110424',...
 Fz = 100;
 implement_case_id = 6;
 num_recording = length(recording_sets);
-is_only_NL = 1;
+is_only_NL = 0;
 for ii = 1:num_recording
     recording_name = recording_sets{ii};
     
