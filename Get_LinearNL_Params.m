@@ -63,7 +63,7 @@ plot(t, mov_tf, 'm');
 xlabel('Time (s)');
 ylabel('Effective contrast');
 legend({'TF', 'exc TF', 'inh TF'});
-keyboard;
+% keyboard;
 %%
 save_file_name = sprintf('%s_LinearNL_params.mat', recording_name);
 save(sprintf('./Results/MovingBar/%s', save_file_name), 'SF_params', 'TF_params', 'tRF', 'smtstdSTA');
