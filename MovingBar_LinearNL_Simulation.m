@@ -237,46 +237,58 @@ dim2 = size(opt_STAmat, 2);
 diag = 500/pix2um;
 
 max_time_points = size(Data, 6);
+[Y, X] = meshgrid(1:size(opt_STAmat, 1), 1:size(opt_STAmat, 2)); % Precompute meshgrid
+
 for q = 1:length(dim2_contrast)
     for k = 1:length(dim3_bar_width)
+        bw = dim3_bar_width(k)/pix2um;
         for j = 1:length(dim4_speeds)
-            switch lower(bar_type)
-                case 'on'
-                    cmov = (-1 + dim2_contrast(q)*2)*ones(size(opt_STAmat));
-                case 'off'
-                    cmov = (1 - dim2_contrast(q)*2)*ones(size(opt_STAmat));
-            end
-            bw = dim3_bar_width(k)/pix2um;
+            % Precompute constants outside time loop
             diag = 2*(500)/pix2um;
             cAng = dim1_moving_direction(dr_id);
             step = (dim4_speeds(j)/pix2um).*[cos(a2d(cAng+180)) sin(a2d(cAng+180))];
-            posi = [cos(a2d(cAng))*0.5*diag sin(a2d(cAng))*0.5*diag]+...
-                [cos(a2d(cAng))*0.5*bw sin(a2d(cAng))*0.5*bw];
+            posi = [cos(a2d(cAng))*0.5*diag sin(a2d(cAng))*0.5*diag] + ...
+                   [cos(a2d(cAng))*0.5*bw sin(a2d(cAng))*0.5*bw];
             num_time = round(min([(diag+bw)*Fz/step(1)+0.5*Fz, max_time_points]));
             csig = nan(1, num_time);
             csig_s = nan(1, num_time);
             ccntr = nan(1, num_time);
+
+            % Initialize cmov only once per (q,k,j)
+            switch lower(bar_type)
+                case 'on'
+                    cmov = (-1 + dim2_contrast(q)*2)*ones([size(opt_STAmat), num_time+1]);
+                case 'off'
+                    cmov = (1 - dim2_contrast(q)*2)*ones([size(opt_STAmat), num_time+1]);
+            end
+
+            % Precompute mask shifts for all time points if possible
+            mask_shifts = zeros(size(Y,1), size(Y,2), num_time);
             for i = 1:num_time
                 dstep = i*step/Fz;
-                move = posi+dstep;
+                move = posi + dstep;
                 switch cAng
-                    case 0
-                        masked = abs((Y-0.5*(size(opt_STAmat, 1)+1)-move(1))) < 0.5*bw;
-                    case 180
-                        masked = abs((Y-0.5*(size(opt_STAmat, 1)+1)-move(1))) < 0.5*bw;
+                    case {0, 180}
+                        mask_shifts(:,:,i) = abs((Y-0.5*(size(opt_STAmat, 1)+1)-move(1))) < 0.5*bw;
                 end
-                
-                csig(i) = mean(cmov.*opt_STAmat, 'all');
-                csig_s(i) = mean(cmov.*mov_STAmat, 'all');
-                ccntr(i) = std(cmov, [], 'all');
-                cmov(:, :, 1) = [];
-                
+            end
+
+            for i = 1:num_time
+                masked = mask_shifts(:,:,i);
+
+                % Only use the last cmov slice for calculation
+                cmov_slice = cmov(:,:,i);
+
+                csig(i) = mean(cmov_slice.*opt_STAmat, 'all');
+                csig_s(i) = mean(cmov_slice.*mov_STAmat, 'all');
+                ccntr(i) = std(cmov_slice, [], 'all');
+
+                % Generate canvas
                 switch lower(bar_type)
                     case 'on'
                         canvas = 2*(double(masked)-0.5);
                         canvas(canvas==-1) = -1 + dim2_contrast(q)*2;
                         if is_blurry
-                            vrange = 1+dim2_contrast(q);
                             canvas = imgaussfilt(canvas, blurry_length);
                             if j == 1 && i == 1
                                 maxv = max(canvas(:));
@@ -298,21 +310,25 @@ for q = 1:length(dim2_contrast)
                             canvas = canvas*extend_ratio+maxv*(1-extend_ratio);
                         end
                 end
-                
-                
-                cmov(:, :, end+1) = canvas;
-                if mod(i, 10) == 1
-                    figure(1);
-                    imagesc(canvas', [-1 1]); colorbar;
-                end
-                clc
 
-                fprintf('Progress ... %d/%d, %d/%d, %d/%d, %d/%d, %d/%d, %d/%d \n',  ii, num_recording, jj, 2, q, length(dim2_contrast),... 
-                    k, length(dim3_bar_width), j, length(dim3_bar_width), i, num_time);
+                % Store canvas in cmov
+                cmov(:,:,i+1) = canvas;
+
+                % Only show figure every 50 steps or as needed
+                if mod(i, 50) == 1
+                    % Uncomment for debugging
+                    % figure(1); imagesc(canvas', [-1 1]); colorbar;
+                end
             end
-            cntr(q, k, j, 1:length(csig)) = ccntr;
-            resp(q, k, j, 1:length(csig)) = csig;
-            resp_s(q, k, j, 1:length(csig)) = csig_s;
+
+            % Assign results
+            cntr(q, k, j, 1:num_time) = ccntr;
+            resp(q, k, j, 1:num_time) = csig;
+            resp_s(q, k, j, 1:num_time) = csig_s;
+
+            % Print progress every outer loop
+            fprintf('Progress ... q=%d/%d, k=%d/%d, j=%d/%d\n', ...
+                q, length(dim2_contrast), k, length(dim3_bar_width), j, length(dim4_speeds));
         end
     end
 end

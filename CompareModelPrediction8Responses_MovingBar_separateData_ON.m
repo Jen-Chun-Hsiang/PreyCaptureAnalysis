@@ -2,8 +2,8 @@ clear all; close all; clc;
 %% specify the recording neurons
 load_data_folder ='\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite\';
 stim_data_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Data\Stimulation\';
-recording_name = 'd101424'; % b092324
-response_name = 'd101424'; % a082924
+recording_name = 'b103124'; % b092324
+response_name = 'b103124'; % a082924
 switch recording_name
     case 'b092324'
         stim_wn_id = '001';
@@ -16,6 +16,10 @@ switch recording_name
     case 'd101424'
         stim_wn_id = '001';
         stim_mb_id = '002';
+        load_recording_name = recording_name;
+    case 'b103124'
+        stim_wn_id = '002';
+        stim_mb_id = '003';
         load_recording_name = recording_name;
 
 end
