@@ -6,9 +6,11 @@ close all
 figure(1); clf; hold on
 NL_params = nan(num_set, 6);
 NL_curves = nan(num_set, length(x_sample_range));
+NL_save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\NonlinearFitting';
 for j = 1:num_set
     cla; hold on; % Clear axes and hold for each dataset
     file_name = sprintf('%s.mat', data_sets{j});
+    clear PBs FRs
     load(fullfile(folder_name, file_name), 'PBs', 'FRs');
 
     [~, sids] = sort(PBs);
@@ -76,8 +78,13 @@ for j = 1:num_set
     xlabel('generator signal');
     ylabel('Firing rate');
     ylim([0 max(y)]);
-    title(sprintf('%d, Fit type: %s, Center x: %.3f, Center y: %.3f\n', j, fit_type, center_x, center_y));
+    % title(sprintf('%d, Fit type: %s, Center x: %.3f, Center y: %.3f\n', j, fit_type, center_x, center_y));
+    title(sprintf('cell %s - %s - %s', data_sets{j}, cell_type{j}, location{j}));
     legend('Data', 'Fit', 'Center');
+    %%
+    save_nl_file_name = fullfile(NL_save_folder, sprintf('NL_Fitting_plot_%s_%s_%s', data_sets{j}, cell_type{j}, location{j}));
+    % print(gcf, save_nl_file_name, '-depsc', '-painters'); % EPS format
+    print(gcf, save_nl_file_name, '-dpng', '-r300'); % PNG, 600 dpi
     %%
     fprintf('Fit type: %s, Center x: %.3f, Center y: %.3f\n', fit_type, center_x, center_y);
     if is_wait_to_show

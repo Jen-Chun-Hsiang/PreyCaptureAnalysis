@@ -236,7 +236,7 @@ keyboard
 
 %% [AA] save data given a time stamp of processing
 
-process_version = 'GaussianFitting_processed_080725_1.mat';
+process_version = 'GaussianFitting_processed_081425_1.mat';
 
 % Check if processed file exists before running spatial receptive field fitting
 processedFile = fullfile(folder_name, process_version);
@@ -244,18 +244,25 @@ if exist(processedFile, 'file')
     disp('Processed file found. Loading instead of rerunning fitting.');
     load(processedFile);
 else
-    % Run spatial receptive field fitting
+    % Run spatial receptive field fitting with bounds
     num_gauss = 1;
     image = Data{1}.stdSTA';
     initial_params = [size(image, 1)/2, size(image, 2)/2, 50, 50, 0, 0.1, 1, 200, 200, 0.1];
     initial_params = repmat(initial_params, num_gauss, 1);
     initial_params(:, 1:2) = initial_params(:, 1:2) + 10*rand(num_gauss, 2);
-    initial_params = initial_params';
-    options.MaxFunEvals = 600*length(initial_params(:));
+    initial_params = initial_params(:);
+
+    % Example bounds (adjust as needed)
+    lb = [1, 1, 5, 5, -pi, -10, 0.5, 5, 5, 0];   % lower bounds
+    ub = [size(image,1), size(image,2), 200, 200, pi, 10, 10, 1000, 1000, 10]; % upper bounds
+    lb = repmat(lb, num_gauss, 1);
+    ub = repmat(ub, num_gauss, 1);
+
+    options = optimoptions('fmincon', 'Display', 'off', 'MaxFunctionEvaluations', 600*length(initial_params));
     for k = 1:num_set
         image = Data{k}.stdSTA';
-        objective_function = @(params) 1-corr(image(:), reshape(gaussian_multi(params, image, num_gauss), [], 1));  
-        optimal_params = fminsearch(objective_function, initial_params, options);
+        objective_function = @(params) 1-corr(image(:), reshape(gaussian_multi(params, image, num_gauss), [], 1));
+        optimal_params = fmincon(objective_function, initial_params, [], [], [], [], lb, ub, [], options);
         if k == 1
             gauss_est = nan(num_set, length(optimal_params));
         end
@@ -287,6 +294,8 @@ elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
 % avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
 avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
 surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
+%%
+keyboard;
 %% Get area size 
 FindThreshold_MeanMinusKStd
 %%
