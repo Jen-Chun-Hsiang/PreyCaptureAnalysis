@@ -226,6 +226,7 @@ title(sprintf('Contrast:%0.2G %d (um) %d (um/s)', dim2_contrast(ct_id), dim3_bar
 %%
 dr_id = 3;
 %%
+is_display = 0;
 close all
 num_time = length(x);
 t = (0:num_time-1)/Fz;
@@ -299,9 +300,8 @@ for q = 1:length(dim2_contrast)
                         end
                 end
                 
-                
                 cmov(:, :, end+1) = canvas;
-                if mod(i, 10) == 1
+                if mod(i, 10) == 1 && is_display
                     figure(1);
                     imagesc(canvas', [-1 1]); colorbar;
                 end
