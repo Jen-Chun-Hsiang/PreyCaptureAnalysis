@@ -84,8 +84,7 @@ GetWhiteNoise_Nonlinearity
 visualize_nonlinear_curve
 keyboard;
 
-%%
-keyboard;
+
 %% Skip process to section [AA] for loading data
 %% show difference in temporal filter
 ct = t(2:end);
@@ -279,6 +278,7 @@ else
     end
     save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace');
     % Save split group variables to the same file, appending
+    split_gauss_groups
     if exist('gauss_est_ON_temporal', 'var')
         save(processedFile, 'gauss_est_ON_temporal', 'gauss_est_ON_nasal', 'gauss_est_OFF_temporal', 'gauss_est_OFF_nasal', ...
             'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');
@@ -290,6 +290,9 @@ end
 
 split_est_parameter_by_celltype
 
+
+%%
+
 elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
 % avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
 avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
@@ -299,6 +302,7 @@ keyboard;
 %% Get area size 
 FindThreshold_MeanMinusKStd
 %%
+clc
 Colors = lines(6); %
 clear Ids ylims ylab values
 Ids{1} = cell_type_numeric == 1;
@@ -309,13 +313,17 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'nl_slope';
+eval_target = 'nl_baseline';
 switch lower(eval_target)
     case 'nl_baseline'
+        zero_id = find(x_sample_range==0);
+        values = NL_curves(:, zero_id);
+        ylab = 'NL baseline param';
+    case 'nl_baseline_param'
         values = NL_params(:, 4);
         ylims = [-0.2 25];
         ytick = 0:10:20;
-        ylab = 'NL baseline';
+        ylab = 'NL baseline param';
     case 'nl_slope'
         values = NL_params(:, 1)./(NL_params(:, 3)*sqrt(2/pi));
         ylims = [0 180];
@@ -369,6 +377,11 @@ for i = 1:6
     xticlab{i} = sprintf('%s (n=%d)', barlabels{i}, num_n(i));
 end
 box off
+%%
+p_ONn_t = ranksum(values(Ids{3}),values(Ids{4}))
+p_ONFF_t = ranksum(values(Ids{5}),values(Ids{6}))
+% [~, p_ONn_t] = ttest2(values(Ids{3}), values(Ids{4}))
+% [~, p_ONFF_t] = ttest2(values(Ids{5}), values(Ids{6}))
 %%
 Colors = [0.3*ones(1, 3);
           0.6*ones(1, 3);
