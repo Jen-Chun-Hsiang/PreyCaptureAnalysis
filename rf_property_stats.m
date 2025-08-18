@@ -1,5 +1,5 @@
 
-group_id = 2;
+group_id = 6;
 switch group_id
     case 1
         % ONSustained AcuteZone vs ONSustained DN
@@ -10,6 +10,32 @@ switch group_id
         % OFFSustained AcuteZone vs OFFSustained DN
         x = OFFSus_AcuteZone_SI;
         y = OFFSus_DN_SI;
+        group_names = {'OFFSus AcuteZone', 'OFFSus DN'};
+    case 3
+        x = TF_time2peak(Ids{3});
+        y = TF_time2peak(Ids{4});
+        group_names = {'ONSus AcuteZone', 'ONSus DN'};
+    case 4
+        x = TF_time2peak(Ids{5});
+        y = TF_time2peak(Ids{6});
+        group_names = {'OFFSus AcuteZone', 'OFFSus DN'};
+    case 5
+        rf_area = rf_pixels*4.375^2;
+        x = rf_area(Ids{3});
+        y = rf_area(Ids{4});
+        group_names = {'ONSus AcuteZone', 'ONSus DN'};
+    case 6
+        rf_area = rf_pixels*4.375^2;
+        x = rf_area(Ids{5});
+        y = rf_area(Ids{6});
+        group_names = {'OFFSus AcuteZone', 'OFFSus DN'};
+    case 7
+        x = avg_rad(Ids{3});
+        y = avg_rad(Ids{4});
+        group_names = {'ONSus AcuteZone', 'ONSus DN'};
+    case 8
+        x = avg_rad(Ids{5});
+        y = avg_rad(Ids{6});
         group_names = {'OFFSus AcuteZone', 'OFFSus DN'};
     otherwise
         error('Invalid group_id');

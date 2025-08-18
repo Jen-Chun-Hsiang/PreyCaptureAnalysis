@@ -1,5 +1,5 @@
 % Parameters
-show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
+show_cell_type = [1];        % Set to 0 or 1 to filter, or [] to ignore
 show_location_type = [1];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';           % Options: '', 'cell', 'location'
 normalize_peak = true;      % Set to true to normalize each filter to its peak (abs)
@@ -174,17 +174,17 @@ else
     xlabel('Time before spike (s)'); ylabel('Filter');
     legend([titles, {'Average'}], 'Interpreter', 'none');
     if normalize_peak
-        if show_cell_type
+        if show_cell_type  % as ON
             ylim([-0.4 1]);
-            yticks(0:0.25:1);
-            yticklabels({'0','', '0.5', '', '1'});
+            yticks(0:0.5:1);
+            yticklabels({'0','0.5', '1'});
             xlim([-0.5 0]);
             xticks([-0.5 -0.25 0]);
             xticklabels({'-0.5','-0.25','0'});
-        else
+        else    % as OFF
             ylim([-1.1 0.3]);
-            yticks(-1:0.25:1);
-            yticklabels({'-1','', '-0.5', '', '0'});
+            yticks(-1:0.5:0);
+            yticklabels({'-1','-0.5',  '0'});
             xlim([-0.5 0]);
             xticks([-0.5 -0.25 0]);
             xticklabels({'-0.5','-0.25','0'});

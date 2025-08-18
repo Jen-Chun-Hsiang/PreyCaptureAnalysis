@@ -17,6 +17,7 @@ location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',  
              'Temporal',...
              };
 
+process_version = 'GaussianFitting_processed_081425_1.mat';
 is_normalized_tf = 1;
 save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
 if ~exist(save_folder, 'dir')
@@ -87,75 +88,77 @@ keyboard;
 
 %% Skip process to section [AA] for loading data
 %% show difference in temporal filter
-ct = t(2:end);
-Trace = nan(num_set,  length(ct));
 
-save_tf_folder = fullfile(save_folder, 'TF_Fits');
-if ~exist(save_tf_folder, 'dir')
-    mkdir(save_tf_folder);
-end
-x = 1:length(ct);
-figure; hold on
-for k = 1:num_set
-    clc
-    fprintf('Processing %s... %d/%d \n', data_sets{k}, k, num_set);
-    csig = Data{k}.tRF;
-    if is_normalized_tf
-        csig = csig./max(abs(csig));
-    end
-    OptW = GaussianTemporalFilter2(csig');
 
-    tf = gaussmf(x, [OptW(1) OptW(3)])*OptW(5) - gaussmf(x, [OptW(2) OptW(4)])*(OptW(6)*OptW(5)) + OptW(7);
 
-    if k == 1
-        Gauss_TF_est = nan(num_set, length(OptW));
-    end
-    Gauss_TF_est(k, :) = OptW;
-    % switch lower(cell_type{k})
-    %     case 'on'
-    %         plot(ct, csig, 'Color', [247, 224, 12]/255);
-    %     case 'off'
-    %         plot(ct, csig, 'Color', 0.4*ones(1, 3));
-    % end
-    Trace(k, :) = csig;
-
-    figure('Visible','off'); hold on
-    plot(ct, csig, 'k', 'LineWidth', 1.5); % normalized csig
-    plot(ct, tf, 'r--', 'LineWidth', 1.5); % fitted tf
-    legend('Normalized csig', 'Fitted TF');
-    xlabel('Time (s)');
-    ylabel('Normalized Value');
-    title(sprintf('TF Fit: %s (%s, %s)', data_sets{k}, cell_type{k}, location{k}));
-    set(gca, 'Box', 'off');
-    saveas(gcf, fullfile(save_tf_folder, sprintf('TFfit_%s.png', data_sets{k})));
-    close(gcf);
-end
-h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==1, :), 1)), 'Color', [245 182 66]/255, 'LineWidth', 2);
-h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==0, :), 1)), 'Color', 0*ones(1, 3), 'LineWidth', 2);
-xlabel('Time (s)');
-xticks(-0.5:0.25:0)
-xticklabels({'-0.5', '0.25', '0'});
-if is_normalized_tf
-    yticks(-1:0.5:1)
-    yticklabels({'-1', '', '0', '', '1'});
+% Check if processed file exists before running spatial receptive field fitting
+processedFile = fullfile(folder_name, process_version);
+if exist(processedFile, 'file')
+    disp('Processed file found. Loading instead of rerunning fitting.');
+    load(processedFile);
 else
-    yticks(-100:50:100)
-    yticklabels({'-100', '', '0', '', '100'});
-end
-ylabel('Average stimulus value');
-legend([h1, h2], 'ON', 'OFF');
-%%
-keyboard;
-%%
-figure; hold on
-%%
-x = 1:length(csig);
-OptW = median(Gauss_TF_est(cell_type_numeric==0 & location_type_numeric==1, :), 1);
-tf = (gaussmf(x, [OptW(1) OptW(3)])*OptW(5)-gaussmf(x, [OptW(2) OptW(4)])*OptW(6))+OptW(7);
+    ct = t(2:end);
+    Trace = nan(num_set,  length(ct));
 
-plot(tf);
+    save_tf_folder = fullfile(save_folder, 'TF_Fits');
+    if ~exist(save_tf_folder, 'dir')
+        mkdir(save_tf_folder);
+    end
+    x = 1:length(ct);
+    figure; hold on
+    for k = 1:num_set
+        clc
+        fprintf('Processing %s... %d/%d \n', data_sets{k}, k, num_set);
+        csig = Data{k}.tRF;
+        if is_normalized_tf
+            csig = csig./max(abs(csig));
+        end
+        OptW = GaussianTemporalFilter2(csig');
+
+        tf = gaussmf(x, [OptW(1) OptW(3)])*OptW(5) - gaussmf(x, [OptW(2) OptW(4)])*(OptW(6)*OptW(5)) + OptW(7);
+
+        if k == 1
+            Gauss_TF_est = nan(num_set, length(OptW));
+        end
+        Gauss_TF_est(k, :) = OptW;
+        % switch lower(cell_type{k})
+        %     case 'on'
+        %         plot(ct, csig, 'Color', [247, 224, 12]/255);
+        %     case 'off'
+        %         plot(ct, csig, 'Color', 0.4*ones(1, 3));
+        % end
+        Trace(k, :) = csig;
+
+        figure('Visible','off'); hold on
+        plot(ct, csig, 'k', 'LineWidth', 1.5); % normalized csig
+        plot(ct, tf, 'r--', 'LineWidth', 1.5); % fitted tf
+        legend('Normalized csig', 'Fitted TF');
+        xlabel('Time (s)');
+        ylabel('Normalized Value');
+        title(sprintf('TF Fit: %s (%s, %s)', data_sets{k}, cell_type{k}, location{k}));
+        set(gca, 'Box', 'off');
+        saveas(gcf, fullfile(save_tf_folder, sprintf('TFfit_%s.png', data_sets{k})));
+        close(gcf);
+    end
+    h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==1, :), 1)), 'Color', [245 182 66]/255, 'LineWidth', 2);
+    h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==0, :), 1)), 'Color', 0*ones(1, 3), 'LineWidth', 2);
+    xlabel('Time (s)');
+    xticks(-0.5:0.25:0)
+    xticklabels({'-0.5', '0.25', '0'});
+    if is_normalized_tf
+        yticks(-1:0.5:1)
+        yticklabels({'-1', '', '0', '', '1'});
+    else
+        yticks(-100:50:100)
+        yticklabels({'-100', '', '0', '', '100'});
+    end
+    ylabel('Average stimulus value');
+    legend([h1, h2], 'ON', 'OFF');
+    keyboard;
+end
 %%
-keyboard
+
+
 %%
 isON = cell_type_numeric == 1;
 % isON = Gauss_TF_est(:, 3) >= Gauss_TF_est(:, 4);
@@ -442,6 +445,8 @@ if exist('ylims', 'var')
     end
 end
 xlim([2.5 6.5]);
+%%
+keyboard
 %%
 save_file_name = fullfile(save_folder, sprintf('BarPlot_RF%s_%s', eval_target, process_version(1:end-4)));
 print(gcf, save_file_name, '-depsc', '-painters'); % EPS format

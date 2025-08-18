@@ -4,7 +4,7 @@
 % The threshold is then reported for each image.
 
 % --- User settings ---
-std_plus = 6; % Number of standard deviations below the mean
+std_plus = 2; % Number of standard deviations below the mean
 num_gauss = 1; % Number of Gaussians used in fitting
 
 % --- Load processed results ---
@@ -28,7 +28,7 @@ for k = 1:num_set
     Xc = X - cx; Yc = Y - cy;
     Xr = Xc * cos(theta) + Yc * sin(theta);
     Yr = -Xc * sin(theta) + Yc * cos(theta);
-    mask = (Xr.^2/(2*sx^2) + Yr.^2/(2*sy^2)) <= 2; % 2*sigma ellipse
+    mask = (Xr.^2/(2*sx^2) + Yr.^2/(2*sy^2)) <= 2^2; % 2*sigma ellipse
     % Find threshold within mask
     mask_pixels = image(~mask);
     mu = mean(mask_pixels);
