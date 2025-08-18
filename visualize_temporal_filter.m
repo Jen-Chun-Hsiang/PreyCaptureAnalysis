@@ -1,14 +1,28 @@
 % Parameters
 show_cell_type = [0];        % Set to 0 or 1 to filter, or [] to ignore
-show_location_type = [0];    % Set to 0 or 1 to filter, or [] to ignore
+show_location_type = [1];    % Set to 0 or 1 to filter, or [] to ignore
 compare_type = '';           % Options: '', 'cell', 'location'
 normalize_peak = true;      % Set to true to normalize each filter to its peak (abs)
 sampling_freq = 100;         % Hz
+plot_type = 'shaded';  % 'individual', 'shaded'
 
 numEntries = length(Data);
 filters = {};
 titles = {};
 filtered_indices = [];
+
+switch show_cell_type*10+show_location_type
+    case 0
+        primary_color = [0 120 0]/255;
+    case 1
+        primary_color = [0 180 0]/255;      
+    case 10
+        primary_color = [120 0 120]/255;
+    case 11
+        primary_color = [180 0 180]/255;  
+end
+
+
 
 % Conflict resolution
 if strcmp(compare_type, 'cell') && ~isempty(show_cell_type)
@@ -76,13 +90,23 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     figure;
     subplot(1,2,1);
     hold on;
-    for i = 1:length(leftFilters)
-        plot(t, leftFilters{i}, 'Color', [0.7 0.7 1]);
+    if strcmp(plot_type, 'individual')
+        for i = 1:length(leftFilters)
+            plot(t, leftFilters{i}, 'Color', [0.7 0.7 1]);
+        end
+        if ~isempty(leftFilters)
+            avg_left = mean(cell2mat(leftFilters'),1);
+            plot(t, avg_left, 'b', 'LineWidth', 2);
+        end
+    else
+        if ~isempty(leftFilters)
+            left_mat = cell2mat(leftFilters');
+            avg_left = mean(left_mat,1);
+            sem_left = std(left_mat, [],1) / sqrt(size(left_mat,1));
+            shadePlot(t, avg_left, sem_left, 'b');
+        end
     end
-    if ~isempty(leftFilters)
-        avg_left = mean(cell2mat(leftFilters'),1);
-        plot(t, avg_left, 'b', 'LineWidth', 2);
-    end
+    
     hold off;
     title(sprintf('Type 0 (%s)', compare_type));
     xlabel('Time before spike (s)'); ylabel('Filter');
@@ -96,13 +120,23 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
     end
     subplot(1,2,2);
     hold on;
-    for i = 1:length(rightFilters)
-        plot(t, rightFilters{i}, 'Color', [1 0.7 0.7]);
+    if strcmp(plot_type, 'individual')
+        for i = 1:length(rightFilters)
+            plot(t, rightFilters{i}, 'Color', [1 0.7 0.7]);
+        end
+        if ~isempty(rightFilters)
+            avg_right = mean(cell2mat(rightFilters'),1);
+            plot(t, avg_right, 'r', 'LineWidth', 2);
+        end
+    else
+        if ~isempty(rightFilters)
+            right_mat = cell2mat(rightFilters');
+            avg_right = mean(right_mat,1);
+            sem_right = std(right_mat, [],1) / sqrt(size(right_mat,1));
+            shadePlot(t, avg_right, sem_right, 'r');
+        end
     end
-    if ~isempty(rightFilters)
-        avg_right = mean(cell2mat(rightFilters'),1);
-        plot(t, avg_right, 'r', 'LineWidth', 2);
-    end
+
     hold off;
     title(sprintf('Type 1 (%s)', compare_type));
     xlabel('Time before spike (s)'); ylabel('Filter');
@@ -118,24 +152,43 @@ if strcmp(compare_type, 'cell') || strcmp(compare_type, 'location')
 else
     figure;
     hold on;
-    for i = 1:length(filters)
-        plot(t, filters{i}, 'Color', [0.7 0.7 0.7]);
+    if strcmp(plot_type, 'individual')
+        for i = 1:length(filters)
+            plot(t, filters{i}, 'Color', [0.7 0.7 0.7]);
+        end
+        if ~isempty(filters)
+            avg_all = mean(cell2mat(filters'),1);
+            plot(t, avg_all, 'k', 'LineWidth', 2);
+        end
+    else
+        if ~isempty(filters)
+            filter_mat = cell2mat(filters');
+            avg_filter = mean(filter_mat,1);
+            sem_filter = std(filter_mat, [],1) / sqrt(size(filter_mat,1));
+            shadePlot(t, avg_filter, sem_filter, primary_color, 0.5, 2);
+        end
     end
-    if ~isempty(filters)
-        avg_all = mean(cell2mat(filters'),1);
-        plot(t, avg_all, 'k', 'LineWidth', 2);
-    end
+    
     hold off;
-    title('Temporal Filters');
+    title(sprintf('Temporal Filters (n=%d)', length(filters)));
     xlabel('Time before spike (s)'); ylabel('Filter');
     legend([titles, {'Average'}], 'Interpreter', 'none');
     if normalize_peak
-        ylim([-1 1]);
-        yticks(-1:0.5:1);
-        yticklabels({'-1','', '0', '', '1'});
-        xlim([-0.5 0]);
-        xticks([-0.5 -0.25 0]);
-        xticklabels({'-0.5','-0.25','0'});
+        if show_cell_type
+            ylim([-0.4 1]);
+            yticks(0:0.25:1);
+            yticklabels({'0','', '0.5', '', '1'});
+            xlim([-0.5 0]);
+            xticks([-0.5 -0.25 0]);
+            xticklabels({'-0.5','-0.25','0'});
+        else
+            ylim([-1.1 0.3]);
+            yticks(-1:0.25:1);
+            yticklabels({'-1','', '-0.5', '', '0'});
+            xlim([-0.5 0]);
+            xticks([-0.5 -0.25 0]);
+            xticklabels({'-0.5','-0.25','0'});
+        end
     end
 end
 
@@ -160,3 +213,4 @@ keyboard
 save_file_name = fullfile(save_folder, sprintf('TemporalFilters%s%s%s_%s', filter_str, comp_str, norm_str, datestr(now,'yyyymmdd_HHMMSS')));
 print(gcf, save_file_name, '-depsc', '-painters');
 print(gcf, save_file_name, '-dpng', '-r300');
+
