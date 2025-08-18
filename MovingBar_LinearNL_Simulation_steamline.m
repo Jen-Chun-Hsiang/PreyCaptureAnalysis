@@ -16,8 +16,10 @@ cell_idx = 1; % Modify this to match your current cell being processed
 
 % Create spatial filter from fitted parameters
 spatial_params = gauss_est(cell_idx, :);
+
+% modify the center-surround ratio based on the measurement
 spatial_filter = gaussian_multi(spatial_params, zeros(size(opt_STAmat, 1), size(opt_STAmat, 2)), 1);
-spatial_filter = spatial_filter - mean(spatial_filter(:)); % Zero mean
+spatial_filter = spatial_filter - median(spatial_filter(:)); % Zero mean
 
 % Create temporal filter from fitted parameters
 temporal_params = Gauss_TF_est(cell_idx, :);
@@ -160,58 +162,6 @@ for q = 1:length(dim2_contrast)
     end
 end
 
-%% Helper Functions (add these at the end of your script)
-function output = gaussian_multi(params, image, num_gauss)
-    % Extract parameters for single Gaussian
-    x0 = params(1);      % center x
-    y0 = params(2);      % center y
-    sigma_x = params(3); % width x
-    sigma_y = params(4); % width y
-    theta = params(5);   % rotation
-    offset = params(6);  % offset
-    amplitude = params(7); % amplitude
-    
-    if length(params) > 7
-        % Surround parameters if available
-        sigma_x_surr = params(8);
-        sigma_y_surr = params(9);
-        amplitude_surr = params(10);
-    else
-        sigma_x_surr = sigma_x * 3;
-        sigma_y_surr = sigma_y * 3;
-        amplitude_surr = 0;
-    end
-    
-    [X, Y] = meshgrid(1:size(image, 2), 1:size(image, 1));
-    
-    % Rotation
-    X_rot = (X - x0) * cos(theta) - (Y - y0) * sin(theta);
-    Y_rot = (X - x0) * sin(theta) + (Y - y0) * cos(theta);
-    
-    % Center Gaussian
-    center = amplitude * exp(-0.5 * ((X_rot/sigma_x).^2 + (Y_rot/sigma_y).^2));
-    
-    % Surround Gaussian
-    surround = amplitude_surr * exp(-0.5 * ((X_rot/sigma_x_surr).^2 + (Y_rot/sigma_y_surr).^2));
-    
-    output = center - surround + offset;
-end
-
-function output = gaussian_temporalfilter(t, params)
-    % params: [sigma1, sigma2, mu1, mu2, amp1, amp2, offset]
-    sigma1 = params(1);
-    sigma2 = params(2);
-    mu1 = params(3);
-    mu2 = params(4);
-    amp1 = params(5);
-    amp2 = params(6);
-    offset = params(7);
-    
-    gauss1 = amp1 * exp(-0.5 * ((t - mu1) / sigma1).^2);
-    gauss2 = amp2 * exp(-0.5 * ((t - mu2) / sigma2).^2);
-    
-    output = gauss1 - gauss2 + offset;
-end
 
 %% Save results with LN model predictions
 if is_blurry
