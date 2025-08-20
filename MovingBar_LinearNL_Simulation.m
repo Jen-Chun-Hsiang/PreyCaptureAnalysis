@@ -136,6 +136,7 @@ xlabel('Time (s)');
 ylabel('Effective contrast');
 legend({'TF', 'exc TF', 'inh TF'});
 %% Generate Combine STA
+keyboard;
 opt_STAmat = opt_sf.*reshape(opt_tf, 1, 1, []);
 opt_STAmat = permute(opt_STAmat, [2, 1, 3]);
 masked_STAmat = opt_STAmat;
@@ -224,7 +225,7 @@ ct = (0:size(Data, 6)-1)/Fz;
 plot(ct, squeeze(mean(Data(dr_id, ct_id, bw_id, sp_id, :, :), 5, 'omitnan')));
 title(sprintf('Contrast:%0.2G %d (um) %d (um/s)', dim2_contrast(ct_id), dim3_bar_width(bw_id), dim4_speeds(sp_id)));
 %%
-dr_id = 3;
+dr_id = 1;
 %%
 is_display = 0;
 close all

@@ -95,7 +95,7 @@ if is_show_fitted
 end
 %% ON & OFF comparison
 Fz = 100;
-disp_direction = 0;
+disp_direction = 180;
 disp_contrast = 0.33;
 disp_bar_witdth = [50, 100, 200, 400, 800];
 disp_speeds = [500, 1000, 2000, 4000, 8000];

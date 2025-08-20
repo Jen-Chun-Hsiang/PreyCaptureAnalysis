@@ -3,16 +3,50 @@ clear all; close all; clc;
 load_data_folder ='\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite\';
 stim_data_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Data\Stimulation\';
 % recording_sets = {'b101424', 'c101424', 'd101424', 'e101424', 'a101624', 'b101624', 'd101624', 'e101624', 'd101924', 'e101924'};
-recording_sets = {'b103124',   'e103124', 'a110424',...
+% recording_sets = {'b103124',   'e103124', 'a110424',...
+%              'c110424',                       'f110424', 'g110424',   'a110924', 'b110924', 'c110924',...
+%              'a111224'};
+
+recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101224', 'e101224',...
+             'b101424', 'c101424', 'd101424', 'e101424', 'a101624',   'b101624', 'd101624', 'e101624',...
+             'b101924', 'c101924', 'd101924', 'e101924', 'b103124',   'e103124', 'a110424',...
              'c110424',                       'f110424', 'g110424',   'a110924', 'b110924', 'c110924',...
              'a111224'};
 Fz = 100;
 implement_case_id = 6;
 num_recording = length(recording_sets);
 is_only_NL = 0;
+is_display = 0;
+surround_sf_type = 'fixed'; % 'fixed', 'linearfit'
+
+process_version = 'GaussianFitting_processed_082025_1.mat';
+folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite';
+processedFile = fullfile(folder_name, process_version);
+
+if exist(processedFile, 'file')
+    load(processedFile, 'gauss_est', 'Gauss_TF_est', 'data_sets');
+    fprintf('Loaded fitted parameters for LN model\n');
+else
+    error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
+end
+assert(length(data_sets) == size(gauss_est, 1), 'Data sets and fitted parameters do not match.');
+assert(length(data_sets) == size(Gauss_TF_est, 1), 'Data sets and fitted parameters do not match.');
+
+
 for ii = 1:num_recording
     recording_name = recording_sets{ii};
-    
+    if ii == 1
+        load([load_data_folder recording_name '.mat'], 'masked_STAmat', 'stdSTA');
+        [D1_mat, D2_mat, D3_mat] = size(masked_STAmat);
+        assert(size(stdSTA, 1) == D1_mat && size(stdSTA, 2) == D2_mat, 'stdSTA size mismatch'); 
+        clear masked_STAmat;
+    end
+
+    loadFileName = sprintf('%s_moving_bar_processed.mat', recording_name);
+    load(sprintf('./Results/MovingBar/%s', loadFileName), 'dim1_moving_direction', 'dim2_contrast', 'dim3_bar_width',...
+    'dim4_speeds', 'dim5_repeats', 'dim6_time', 'Data', 'Moving_end_time_ids');
+    cell_idx = find(strcmp(recording_name, data_sets));
+    fprintf('Processing %s (%d/%d)...\n', recording_name, ii, num_recording);
     switch recording_name
         case 'e100724'
             stim_wn_id = '003';
@@ -133,97 +167,8 @@ for ii = 1:num_recording
     end
     response_name = recording_name;
     load_recording_name = recording_name;
-    Get_LinearNL_Params
-    if ~ is_only_NL
-        for jj = 1:2
-            switch jj
-                case 1
-                    is_blurry = 0;
-                case 2
-                    is_blurry = 1;
-            end
-            MovingBar_LinearNL_Simulation
-        end
-    end
+    MovingBar_LinearNL_Simulation_steamline
     
 end
-%%
-keyboard;
 
-%%
-load(sprintf('./Results/MovingBar/%s', save_file_name), 'dim1_moving_direction', 'dim2_contrast',...
-    'dim3_bar_width', 'dim4_speeds','dim5_repeats', 'dim6_time', 'resp', 'resp_s', 'cntr');
-
-%%
-dr_id = 3;
-type_display = 4;
-switch type_display
-    case 0
-        cresp = resp-0.3*resp_s;
-    case 1
-        cresp = resp;
-    case 2
-        cresp = resp-0.25*resp_s; 
-    case 3
-        cresp = resp-0.5*(resp_s-7e-5); 
-    case 4
-        cresp = resp-resp_s;
-end
-ct = (0:size(Data, 6)-1)/Fz;
-close all
-for q = 1:length(dim2_contrast)
-    figure;
-    for i = 1:length(dim3_bar_width)
-        for j = 1:length(dim4_speeds)
-            subplot(length(dim3_bar_width), length(dim4_speeds), (i-1)*length(dim4_speeds) + j);
-            hold on
-            dsig = squeeze(mean(Data(dr_id, q, i, j, :, :), 4, 'omitnan'));
-            dsig = mean(dsig, 1);
-            plot(ct, dsig, 'k');
-            csig = squeeze(cresp(q, i, j, :));
-            switch type_display
-                case 0
-                    csig = csig*max(dsig)./max(csig);
-                    plot(ct, csig, 'm');
-
-                case 1
-                    plot(ct, 1.8*(nl_fuc(csig/divider)-15), 'm');
-                    ylim([0 150]);
-                case 2
-                    plot(ct, 2.2*(nl_fuc(csig/divider)-25), 'm');
-                    ylim([0 150]);
-                case 3
-                    plot(ct, 5*(nl_fuc(csig/divider)-55), 'm');
-                    ylim([0 150]);
-                case 4
-                    plot(ct, 3.5*(nl_fuc(csig/divider)-35), 'm');
-                    ylim([0 150]);
-            end
-            
-            if i == length(dim3_bar_width)
-                xlabel('Time (s)');
-            elseif i == 1
-                title(sprintf('%d (um / s)', dim4_speeds(j)));
-            end
-            if j == 1
-                ylabel(sprintf('Bar width %d (um) \n Firing rate (spike/s)', dim3_bar_width(i)));
-            end
-            xlim([0 ct(end)]);
-        end
-    end
-    sgtitle(sprintf('%s background contrast %.2G', recording_name, dim2_contrast(q)));
-
-end
-
-%%
-exc = resp(1, 3, 1, :);
-inh = resp_s(1, 3, 1, :);
-cmb = resp(1, 3, 1, :)-(resp_s(1, 3, 1, :));
-figure; hold on
-plot(ct, squeeze(exc), 'k');
-plot(ct, squeeze(inh), 'r');
-plot(ct, squeeze(cmb), 'b');
-title('Linear part');
-xlabel('Time (s)')
-legend({'Exc', 'Inh', 'Combined'})
 

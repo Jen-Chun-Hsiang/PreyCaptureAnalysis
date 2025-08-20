@@ -26,12 +26,14 @@ sim = [];
 exp = [];
 ctr = [];
 num_repeat = size(Data, 5);
-
+q_ids = 1; % contrast
+bw_ids = 1:5; % barwidth
+sp_ids = 1:5; % speed
 for k = 1:num_repeat
-    for q = 1:1
+    for q = q_ids
         iid = randperm(5);
-        for i = 1:5 % barwidth
-            for j = 1:5 % speed   % 1:3
+        for i = bw_ids
+            for j = sp_ids
                 csim = squeeze(resp(q, iid(i), j, :));
                 ccntr = squeeze(cntr(q, iid(i), j, :));
                 cexp = squeeze(Data(dr_id, q, iid(i), j, k, 1:length(csim)));
@@ -65,8 +67,8 @@ ct = (0:length(sim)-1)/Fz;
 contrast_name = 'std';
 %% 
 [repeat_id1, repeat_id2] = randomSplit(num_repeat);
-x = mean(Data(dr_id, 1, :, 1:3, repeat_id1, :), 5);
-y = mean(Data(dr_id, 1, :, 1:3, repeat_id2, :), 5);
+x = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id1, :), 5);
+y = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id2, :), 5);
 rmids = isnan(x) | isnan(y);
 x(rmids) = [];
 y(rmids) = [];
@@ -149,7 +151,7 @@ for i = 1:2
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
         'BaselineCorr', 'LNK_params');
 end
-all_corr(ii, :) = PredictionResults(1, :);
+all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])
