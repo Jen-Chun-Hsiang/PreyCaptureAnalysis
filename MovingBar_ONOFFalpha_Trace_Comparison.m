@@ -137,7 +137,7 @@ end
 
 %% within type Comparison
 Fz = 100;
-disp_direction = 0;
+disp_direction = 180;
 disp_contrast = 0;
 disp_bar_witdth = [50, 100, 200, 400, 800];  % [50, 100, 200, 400, 800]
 disp_speeds = [500, 1000, 2000, 4000, 8000]; % [500, 1000, 2000, 4000, 8000]
@@ -189,7 +189,7 @@ end
 %% within type-location Comparison (4 figures: ON-Temporal, ON-Nasal, OFF-Temporal, OFF-Nasal)
 save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
 Fz = 100;
-disp_direction = 0;
+disp_direction = 180;
 disp_contrast = 0;
 disp_bar_witdth = [100];  % [50, 100, 200, 400, 800]
 disp_speeds = [500, 8000]; % [500, 1000, 2000, 4000, 8000]
