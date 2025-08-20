@@ -12,11 +12,11 @@ recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101
 Fz = 100;
 implement_case_id = 6;
 num_recording = length(recording_sets);
-
+all_corr = nan(num_recording, 3);
 for ii = 1:num_recording
     recording_name = recording_sets{ii};
-    PredictionResults = nan(2, 2);
-    BaselineCorr = nan(2, 1);
+    PredictionResults = nan(1, 3);
+    BaselineCorr = nan(1, 1);
     clear PredTraces
     switch recording_name
         case 'e100724'
@@ -138,7 +138,7 @@ for ii = 1:num_recording
     end
     response_name = recording_name;
     load_recording_name = recording_name;
-    for jj = 1:2
+    for jj = 1:1
         switch jj
             case 1
                 is_blurry = 0;

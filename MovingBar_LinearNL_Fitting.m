@@ -31,7 +31,7 @@ for k = 1:num_repeat
     for q = 1:1
         iid = randperm(5);
         for i = 1:5 % barwidth
-            for j = 1:3 % speed
+            for j = 1:5 % speed   % 1:3
                 csim = squeeze(resp(q, iid(i), j, :));
                 ccntr = squeeze(cntr(q, iid(i), j, :));
                 cexp = squeeze(Data(dr_id, q, iid(i), j, k, 1:length(csim)));
@@ -96,11 +96,15 @@ xlabel('Time (s)');
 ylabel('Contrast status (arbi.)');
 ylim([0 max(ctr(:))]);
 box off;
-
+%%
+test_LNK_fitting
+PredictionResults(jj, 3) = corr(exp(:), r_hat(:));
+LNK_params = prm;
 %%
 csim = sim;
 csim = csim*1e6;
 gain_params = [200, 100, 0.3, 1, 0.01, 0.01];
+
 for i = 1:2
     switch i
         case 1
@@ -108,6 +112,7 @@ for i = 1:2
         case 2
             is_sigmoid = 1;
     end
+    tic
     if is_sigmoid
         CostF = @(w) mean((max([gain_control_system_opt_sigmoid([gain_params(1:2) w(1:4)], csim).*w(5)+...
             w(6);zeros(1, length(csim))], [], 1)-exp').^2, 'omitnan');
@@ -136,14 +141,15 @@ for i = 1:2
     xlabel('Time (s)');
     ylabel('Firing rate (spike/s)');
     clc
-    fprintf('progress... %d/%d, %d/%d, %d/%d \n', ii, num_recording, jj, 2, i, 2);
-    % keyboard;
+    fprintf('progress... %d/%d, %d/%d, %d/%d %.2f s\n', ii, num_recording, jj, 2, i, 2, toc);
+
     %%
+    
     save_file_name = sprintf('%s_%d_moving_bar_fitted.mat', recording_name, implement_case_id);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-        'BaselineCorr');
+        'BaselineCorr', 'LNK_params');
 end
-
+all_corr(ii, :) = PredictionResults(1, :);
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])
