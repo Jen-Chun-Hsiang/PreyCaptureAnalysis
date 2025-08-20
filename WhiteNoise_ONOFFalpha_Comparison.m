@@ -260,7 +260,7 @@ keyboard
 
 %% [AA] save data given a time stamp of processing
 
-process_version = 'GaussianFitting_processed_081425_1.mat';
+process_version = 'GaussianFitting_processed_082025_1.mat';
 
 % Check if processed file exists before running spatial receptive field fitting
 processedFile = fullfile(folder_name, process_version);
@@ -301,7 +301,8 @@ else
         assert(length(cell_type_numeric) >= k, 'cell_type_numeric missing entry at index %d', k);
         assert(length(location_type_numeric) >= k, 'location_type_numeric missing entry at index %d', k);
     end
-    save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace');
+    save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace', 'location_type_numeric', 'data_sets',...
+        'cell_type_numeric', 'cell_type', 'location');
     % Save split group variables to the same file, appending
     split_gauss_groups
     if exist('gauss_est_ON_temporal', 'var')
