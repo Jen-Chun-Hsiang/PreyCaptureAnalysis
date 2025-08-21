@@ -2,29 +2,16 @@ loadFileName = sprintf('%s_moving_bar_processed.mat', response_name);
 load(sprintf('./Results/MovingBar/%s', loadFileName), 'Data');
 
 %% save
-movingbar_sim_folder = './Results/MovingBar/';
-str1 = sprintf('%s_%s_moving_bar_LN_simulated', recording_name,...
-    response_name);
-
-
-files = dir(fullfile(movingbar_sim_folder, '*.mat'));
-matchIdx = find(contains({files.name}, str1) & contains({files.name}, bar_type));
-
-if ~isempty(files)
-    if length(matchIdx) > 1
-        error('Multiple matching files found.');
-    else
-        matchedFile = files(matchIdx).name;
-        fprintf('Using matched file: %s\n', matchedFile);
-    end
+if is_blurry
+    save_file_name = sprintf('%s_%s_moving_bar_simulated_%d_burry%0.3G_%s.mat', recording_name,...
+        response_name, implement_case_id, blurry_length, bar_type);
 else
-    error('No matching files found.');
+    save_file_name = sprintf('%s_%s_moving_bar_simulated_%d_%s.mat', recording_name,...
+        response_name, implement_case_id, bar_type);
 end
-
 %%
-load(fullfile(movingbar_sim_folder, matchedFile), 'dim2_contrast',...
-    'dim3_bar_width', 'dim4_speeds','dim5_repeats', 'dim6_time', 'resp', 'resp_s');
-
+load(sprintf('./Results/MovingBar/%s', save_file_name), 'dim1_moving_direction', 'dim2_contrast',...
+    'dim3_bar_width', 'dim4_speeds','dim5_repeats', 'dim6_time', 'resp', 'cntr');
 %%
 load([stim_data_folder 'Temporal_AlphaRGC_' recording_name '_' stim_wn_id '_Retina_1_MovingNoise_1.mat'], 'OLED');
 pix2um = OLED.pixelSize;
@@ -37,7 +24,7 @@ dr_id = 1;
 ctrs = [1 2/3 1/3]*2;
 sim = [];
 exp = [];
-sim_s = [];
+ctr = [];
 num_repeat = size(Data, 5);
 q_ids = 1; % contrast
 bw_ids = 1:5; % barwidth
@@ -48,30 +35,30 @@ for k = 1:num_repeat
         for i = bw_ids
             for j = sp_ids
                 csim = squeeze(resp(q, iid(i), j, :));
-                csim_s = squeeze(resp_s(q, iid(i), j, :));
+                ccntr = squeeze(cntr(q, iid(i), j, :));
                 cexp = squeeze(Data(dr_id, q, iid(i), j, k, 1:length(csim)));
                 snan_ids = find(isnan(csim));
                 enan_ids = find(isnan(cexp));
                 if ~isempty(enan_ids)
                     if snan_ids(1) > enan_ids(1)
                         csim(snan_ids(1):end) = [];
-                        csim_s(snan_ids(1):end) = [];
+                        ccntr(snan_ids(1):end) = [];
                         cexp(snan_ids(1):end) = [];
                     else
                         csim(enan_ids(1):end) = [];
-                        csim_s(enan_ids(1):end) = [];
+                        ccntr(enan_ids(1):end) = [];
                         cexp(enan_ids(1):end) = [];
                     end
                 end
                 snan_ids = find(isnan(csim));
                 if ~isempty(snan_ids)
                     csim(snan_ids) = csim(snan_ids(1)-1);
-                    csim_s(snan_ids) = csim_s(snan_ids(1)-1);
+                    ccntr(snan_ids) = ccntr(snan_ids(1)-1);
                 end
 
                 sim = [sim; csim];
                 exp = [exp; cexp];
-                sim_s = [sim_s; csim_s];
+                ctr = [ctr; ccntr];
             end
         end
     end
@@ -87,7 +74,7 @@ y = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id2, :), 5);
 rmids = isnan(x) | isnan(y);
 x(rmids) = [];
 y(rmids) = [];
-BaselineCorr = corr(x(:), y(:));
+BaselineCorr(jj) = corr(x(:), y(:));
 %%
 close all
 figure;
@@ -106,22 +93,18 @@ plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
 hold on
-plot(ct, sim-0.05*sim_s);
+plot(ct, ctr);
+plot(ct, 1./ctr);
 xlim([0 ct(end)]);
 xlabel('Time (s)');
 ylabel('Contrast status (arbi.)');
-% ylim([0 max(ctr(:))]);
+ylim([0 max(ctr(:))]);
 box off;
 %%
 assert(mean(isnan(sim))<0.01);
-assert(mean(isnan(sim_s))<0.01);
 assert(mean(isnan(exp))<0.01);
-sim(isnan(sim)) = 0;
-sim_s(isnan(sim_s)) = 0;
-exp(isnan(exp)) = 0;
-
-test_LNK_fitting
 keyboard
+test_LNK_fitting
 PredictionResults(jj, 3) = corr(exp(:), r_hat(:));
 LNK_params = prm;
 %%

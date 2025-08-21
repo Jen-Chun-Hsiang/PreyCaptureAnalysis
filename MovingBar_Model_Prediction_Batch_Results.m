@@ -138,14 +138,6 @@ for ii = 1:num_recording
     end
     response_name = recording_name;
     load_recording_name = recording_name;
-    for jj = 1:1
-        switch jj
-            case 1
-                is_blurry = 0;
-            case 2
-                is_blurry = 1;
-        end
-        MovingBar_LinearNL_Fitting
-    end
-    
+    MovingBar_LinearNL_Fitting
+    keyboard
 end
