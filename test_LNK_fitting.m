@@ -37,6 +37,25 @@ end
 prm_s = prm_temp{bestblk};
 r_hat_s = r_hat_temp_s(bestblk, :);
 
+clear prm_temp
+lnk_corr_temp_c = nan(num_lnk_test, 1);
+tic
+for lnk = 1:num_lnk_test
+    fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+    [prm_c, r_hat_c, a_hat, fval] = fitLNK_rate_combo(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
+        'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
+    if lnk == 1
+        r_hat_temp_c = nan(num_lnk_test, length(r_hat_c));
+    end
+    prm_temp{lnk} = prm_c;
+    r_hat_temp_c(lnk, :) = r_hat_c;
+    lnk_corr_temp_c(lnk) = corr(exp(:), r_hat_c(:));
+
+end
+[~, bestblk] = max(lnk_corr_temp_c);
+prm_c = prm_temp{bestblk};
+r_hat_c = r_hat_temp_c(bestblk, :);
+
 %%
 x_lim_range = [28 52];
 close all;
@@ -71,3 +90,5 @@ xlim(x_lim_range);
 xlabel('Time (s)');
 ylabel('linear RF signal (arbi.)');
 box off;
+
+keyboard;
