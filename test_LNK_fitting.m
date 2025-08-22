@@ -18,44 +18,56 @@ end
 prm = prm_temp{bestblk};
 r_hat = r_hat_temp(bestblk, :);
 
-% clear prm_temp
-% lnk_corr_temp_s = nan(num_lnk_test, 1);
-% tic
-% for lnk = 1:num_lnk_test
-%     fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-%     [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
-%         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
-%     if lnk == 1
-%         r_hat_temp_s = nan(num_lnk_test, length(r_hat_s));
-%     end
-%     prm_temp{lnk} = prm_s;
-%     r_hat_temp_s(lnk, :) = r_hat_s;
-%     lnk_corr_temp_s(lnk) = corr(exp(:), r_hat_s(:));
+clear prm_temp
+lnk_corr_temp_s = nan(num_lnk_test, 1);
+tic
+for lnk = 1:num_lnk_test
+    fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+    [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
+        'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
+    if lnk == 1
+        r_hat_temp_s = nan(num_lnk_test, length(r_hat_s));
+    end
+    prm_temp{lnk} = prm_s;
+    r_hat_temp_s(lnk, :) = r_hat_s;
+    lnk_corr_temp_s(lnk) = corr(exp(:), r_hat_s(:));
 
-% end
-% [~, bestblk] = max(lnk_corr_temp_s);
-% prm_s = prm_temp{bestblk};
-% r_hat_s = r_hat_temp_s(bestblk, :);
+end
+[~, bestblk] = max(lnk_corr_temp_s);
+prm_s = prm_temp{bestblk};
+r_hat_s = r_hat_temp_s(bestblk, :);
 
 %%
-close all
+x_lim_range = [28 52];
+close all;
 figure;
-subplot(2, 1, 1)
+subplot(3, 1, 1)
 plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
 plot(ct, sim);
-xlim([0 ct(end)]);
+% xlim([0 ct(end)]);
+xlim(x_lim_range);
 xlabel('Time (s)');
 ylabel('linear RF signal (arbi.)');
 box off;
 
-subplot(2, 1, 2)
+subplot(3, 1, 2)
 plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
 plot(ct, r_hat);
-xlim([0 ct(end)]);
+xlim(x_lim_range);
+xlabel('Time (s)');
+ylabel('linear RF signal (arbi.)');
+box off;
+
+subplot(3, 1, 3)
+plot(ct, exp);
+ylabel('Firing rate (spike/s)');
+yyaxis right
+plot(ct, r_hat_s);
+xlim(x_lim_range);
 xlabel('Time (s)');
 ylabel('linear RF signal (arbi.)');
 box off;

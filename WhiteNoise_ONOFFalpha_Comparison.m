@@ -339,7 +339,7 @@ Ids{5} = cell_type_numeric == 0 & location_type_numeric == 1;
 Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
-eval_target = 'nl_baseline';
+eval_target = 'area';
 switch lower(eval_target)
     case 'nl_baseline'
         zero_id = find(x_sample_range==0);

@@ -80,15 +80,15 @@ ypos = max(y,0);
 rx = mean(abs(x(x~=0)));  if isempty(rx), rx = 1; end
 rxs = mean(abs(x_s(x_s~=0))); if isempty(rxs), rxs = 1; end
 ry = mean(ypos(ypos>0));  if isempty(ry), ry = 1; end
-init.tau     = rand;
-init.alpha_d = rand;
+init.tau     = max(rand*0.5, 1e-6);
+init.alpha_d = max(rand*0.5, 1e-6);
 init.theta   = max(0, prctile(x, 20));
-init.sigma0  = 0.1 + 0.05*std(x);
-init.alpha   = 0.01;
-init.beta    = -0.1;
-init.b_out   = 1;
+init.sigma0  = 0.5*rand + 0.05*std(x);
+init.alpha   = 0.05*rand;
+init.beta    = -0.2*rand;
+init.b_out   = 1+rand;
 init.g_out   = max(ry/(rx+rxs+eps), 0.5);
-init.w_xs    = 1;
+init.w_xs    = -0.1*rand;
 end
 
 function p = packParams_xs(s)

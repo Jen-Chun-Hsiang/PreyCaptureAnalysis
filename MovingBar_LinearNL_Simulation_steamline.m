@@ -60,8 +60,8 @@ for q = 1:length(dim2_contrast)
             num_time = round(min([(diag+bw)*Fz/abs(step(1))+0.5*Fz, max_time_points]));
             
             % Initialize response arrays
-            linear_response = nan(1, num_time);
-            firing_rate = nan(1, num_time);
+            firing_rate_center = nan(1, num_time);
+            firing_rate_surround = nan(1, num_time);
             
             for i = 1:num_time
                 dstep = i*step/Fz;
@@ -122,8 +122,6 @@ for q = 1:length(dim2_contrast)
                         ii, num_recording, q, length(dim2_contrast), ...
                         k, length(dim3_bar_width), j, length(dim4_speeds), i, num_time);
                 end
-                
-                
             end
             
             % Store results

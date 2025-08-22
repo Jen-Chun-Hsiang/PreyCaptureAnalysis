@@ -79,7 +79,6 @@ end
 ct = (0:length(sim)-1)/Fz;
 contrast_name = 'std';
 
-keyboard;
 %% 
 [repeat_id1, repeat_id2] = randomSplit(num_repeat);
 x = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id1, :), 5);
@@ -121,9 +120,9 @@ sim_s(isnan(sim_s)) = 0;
 exp(isnan(exp)) = 0;
 
 test_LNK_fitting
-keyboard
-PredictionResults(jj, 3) = corr(exp(:), r_hat(:));
+PredictionResults( 3:6) = [corr(exp(:), r_hat(:)) corr(exp(:), r_hat_s(:)) corr(exp(:), sim(:)) corr(exp(:), sim_s(:))];
 LNK_params = prm;
+LNK_params_s = prm_s;
 %%
 csim = sim;
 csim = csim*1e6;
@@ -155,9 +154,9 @@ for i = 1:2
     y = max([gain_control_system_opt([gain_params(1:2) OptW(1:4)], csim).*OptW(5)+OptW(6);
         zeros(1, length(csim))], [], 1);
     ct = (0:length(sim)-1)/Fz;
-    PredictionResults(jj, i) = corr(exp(:), y(:));
-    PredTraces{jj, i, 1} = exp(:);
-    PredTraces{jj, i, 2} = y(:);
+    PredictionResults(i) = corr(exp(:), y(:));
+    PredTraces{i, 1} = exp(:);
+    PredTraces{i, 2} = y(:);
     figure; hold on
     plot(ct, exp, 'Color', 0.5*ones(1, 3));
     plot(ct, y, 'b');
@@ -165,15 +164,16 @@ for i = 1:2
     xlabel('Time (s)');
     ylabel('Firing rate (spike/s)');
     clc
-    fprintf('progress... %d/%d, %d/%d, %d/%d %.2f s\n', ii, num_recording, jj, 2, i, 2, toc);
+    fprintf('progress... %d/%d, %d/%d %.2f s\n', ii, num_recording, i, 2, toc);
 
     %%
-    
-    save_file_name = sprintf('%s_%d_moving_bar_fitted.mat', recording_name, implement_case_id);
+
+    save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-        'BaselineCorr', 'LNK_params');
+        'BaselineCorr', 'LNK_params', 'LNK_params_s');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
+all_SC(ii) = LNK_params_s.w_xs;
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])

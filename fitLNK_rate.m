@@ -86,10 +86,10 @@ ry = mean(ypos(ypos>0));  if isempty(ry), ry = 1; end
 init.tau     = max(rand*0.5, 1e-6);                   % s
 init.alpha_d = max(rand*0.5, 1e-6);
 init.theta   = max(0, prctile(x, 20));% threshold so F(x)=max(0,x-theta)
-init.sigma0  = 0.1 + 0.05*std(x);
-init.alpha   = 0.01;
-init.beta    = -0.1;
-init.b_out   = 1;
+init.sigma0  = 0.5*rand + 0.05*std(x);
+init.alpha   = 0.05*rand;
+init.beta    = -0.2*rand;
+init.b_out   = 1+rand;
 init.g_out   = max(ry/(rx+eps), 0.5);
 end
 

@@ -16,7 +16,7 @@ Fz = 100;
 implement_case_id = 6;
 num_recording = length(recording_sets);
 is_only_NL = 0;
-is_display = 1;
+is_display = 0;
 surround_sf_type = 'fixed'; % 'fixed', 'linearfit'
 
 process_version = 'GaussianFitting_processed_082025_1.mat';
@@ -32,15 +32,15 @@ end
 assert(length(data_sets) == size(gauss_est, 1), 'Data sets and fitted parameters do not match.');
 assert(length(data_sets) == size(Gauss_TF_est, 1), 'Data sets and fitted parameters do not match.');
 
+recording_name = recording_sets{1};
+load([load_data_folder recording_name '.mat'], 'masked_STAmat', 'stdSTA');
+[D1_mat, D2_mat, D3_mat] = size(masked_STAmat);
+assert(size(stdSTA, 1) == D1_mat && size(stdSTA, 2) == D2_mat, 'stdSTA size mismatch');
+clear masked_STAmat;
 
-for ii = 1:num_recording
+for ii = 13:num_recording
     recording_name = recording_sets{ii};
-    if ii == 1
-        load([load_data_folder recording_name '.mat'], 'masked_STAmat', 'stdSTA');
-        [D1_mat, D2_mat, D3_mat] = size(masked_STAmat);
-        assert(size(stdSTA, 1) == D1_mat && size(stdSTA, 2) == D2_mat, 'stdSTA size mismatch'); 
-        clear masked_STAmat;
-    end
+    
 
     loadFileName = sprintf('%s_moving_bar_processed.mat', recording_name);
     load(sprintf('./Results/MovingBar/%s', loadFileName), 'dim1_moving_direction', 'dim2_contrast', 'dim3_bar_width',...
@@ -168,7 +168,6 @@ for ii = 1:num_recording
     response_name = recording_name;
     load_recording_name = recording_name;
     MovingBar_LinearNL_Simulation_steamline
-    keyboard;
 end
 
 
