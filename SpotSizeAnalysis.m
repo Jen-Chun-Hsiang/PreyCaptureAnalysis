@@ -69,6 +69,7 @@ for g = 1:numel(groups)
     h = errorbar(sorted_sizes, mu, sem, 'o-', ...
         'LineWidth', 1.5, 'Color', colororder(g,:), 'MarkerFaceColor', colororder(g,:));
     h.CapSize = 6;
+    xlim([0, max(sorted_sizes)*1.05]);
 
     % ---------- Fit DoG-CDF to mean curve ----------
     [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(sorted_sizes(:), mu(:));
@@ -82,8 +83,8 @@ for g = 1:numel(groups)
     
     % Display fit parameters for mean
     fprintf('\n%s DoG-CDF Fit Results (Mean):\n', gname);
-    fprintf('  Center: mu=%.2f, sigma=%.2f\n', p_struct.mu_c, p_struct.sigma_c);
-    fprintf('  Surround: mu=%.2f, sigma=%.2f\n', p_struct.mu_s, p_struct.sigma_s);
+    fprintf('  Shared mean: mu=%.2f\n', p_struct.mu);
+    fprintf('  Center sigma=%.2f, Surround sigma=%.2f\n', p_struct.sigma_c, p_struct.sigma_s);
     fprintf('  Model: gain=%.2f, w_s=%.3f, global_bias=%.2f\n', p_struct.gain, p_struct.w_s, p_struct.global_bias);
     fprintf('  Fit quality: loss=%.4f, R²=%.3f\n', fit_stats.fval, fit_stats.r_squared);
 
@@ -93,7 +94,7 @@ for g = 1:numel(groups)
     % Initialize storage for individual cell fits
     results.(gname).individual_fits = struct();
     cell_params = struct();
-    param_fields = {'mu_c', 'sigma_c', 'mu_s', 'sigma_s', 'w_s', 'gain', 'global_bias'};
+    param_fields = {'mu', 'sigma_c', 'sigma_s', 'w_s', 'gain', 'global_bias'};
     for pf = 1:length(param_fields)
         cell_params.(param_fields{pf}) = nan(nCells, 1);
     end
@@ -105,7 +106,7 @@ for g = 1:numel(groups)
         
         % Check if cell has enough valid data points
         valid_pts = ~isnan(cell_response);
-        if sum(valid_pts) < 6  % Need at least 6 points for 7 parameters
+        if sum(valid_pts) < 5  % Need at least 5 points for 6 parameters
             fprintf('  Cell %d: Insufficient data points (%d), skipping\n', c, sum(valid_pts));
             continue;
         end
@@ -136,30 +137,26 @@ for g = 1:numel(groups)
             plot(sorted_sizes, cell_response, 'o', 'MarkerSize', 8, ...
                 'Color', colororder(g,:), 'MarkerFaceColor', colororder(g,:), ...
                 'LineWidth', 1.5);
-            
             % Plot fitted curve
             plot(s_fit_cell, y_fit_cell, '-', 'LineWidth', 2.5, 'Color', colororder(g,:));
-            
             % Styling
             grid on;
+            xlim([0, max(sorted_sizes)*1.05]);
             xlabel('Spot Diameter');
             ylabel('Mean Firing Rate (Hz)');
             title(sprintf('%s - Cell %d (R²=%.3f)', strrep(gname, '_', '\_'), c, fit_stats_cell.r_squared));
-            
             % Add parameter text
             param_text = sprintf(['Fit Parameters:\n' ...
-                'Center: μ=%.2f, σ=%.2f\n' ...
-                'Surround: μ=%.2f, σ=%.2f\n' ...
+                'Shared μ=%.2f\n' ...
+                'Center σ=%.2f, Surround σ=%.2f\n' ...
                 'Weight: w_s=%.3f\n' ...
                 'Gain: %.2f, Bias: %.2f'], ...
-                p_struct_cell.mu_c, p_struct_cell.sigma_c, ...
-                p_struct_cell.mu_s, p_struct_cell.sigma_s, ...
+                p_struct_cell.mu, p_struct_cell.sigma_c, ...
+                p_struct_cell.sigma_s, ...
                 p_struct_cell.w_s, p_struct_cell.gain, p_struct_cell.global_bias);
-            
             text(0.02, 0.98, param_text, 'Units', 'normalized', ...
                 'VerticalAlignment', 'top', 'FontSize', 9, ...
                 'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k');
-            
             % Save figure
             filename = sprintf('%s_Cell_%d_SpotSizeFit.png', gname, c);
             saveas(fig_cell, fullfile(save_fig_folder, filename));
@@ -203,6 +200,7 @@ end
 
 % ---------------- figure styling ----------------
 grid on;
+xlim([0, max(sorted_sizes)*1.05]);
 xlabel('Diameter');
 ylabel('Mean firing rate during stimulus (Hz)');
 title('Size tuning: mean ± SEM across cells with DoG-CDF fit');
@@ -228,8 +226,8 @@ for g = 1:numel(groups)
         
         % Print parameter statistics
         if isfield(results.(gname), 'cell_params_summary')
-            param_fields = {'mu_c', 'sigma_c', 'mu_s', 'sigma_s', 'w_s', 'gain', 'global_bias'};
-            param_names = {'Center μ', 'Center σ', 'Surround μ', 'Surround σ', 'Surround weight', 'Gain', 'Bias'};
+            param_fields = {'mu', 'sigma_c', 'sigma_s', 'w_s', 'gain', 'global_bias'};
+            param_names = {'Shared μ', 'Center σ', 'Surround σ', 'Surround weight', 'Gain', 'Bias'};
             for pf = 1:length(param_fields)
                 if isfield(results.(gname).cell_params_summary, param_fields{pf})
                     param_stats = results.(gname).cell_params_summary.(param_fields{pf});
@@ -242,6 +240,7 @@ end
 
 
 %%
+close all; clc;
 % Step 1: Define the x-range
 x = 0:0.1:5;
 
@@ -251,12 +250,13 @@ sigma = 1; % standard deviation
 
 % Step 2: Calculate the CDF values
 y = normcdf(x, mu, sigma);
-y2 = normcdf(x, mu+1, sigma*4);
+y2 = normcdf(x, mu, sigma*1.5);
 figure; hold on
 % Step 3: Plot the CDF
 plot(x, y);
-plot(x, y-0.1*y2);
+plot(x, y-0.5*y2);
 title('Theoretical Normal CDF');
 xlabel('x');
 ylabel('F(x)');
+ylim([0 1]);
 grid on;
