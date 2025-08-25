@@ -90,5 +90,3 @@ xlim(x_lim_range);
 xlabel('Time (s)');
 ylabel('linear RF signal (arbi.)');
 box off;
-
-keyboard;

@@ -1,4 +1,4 @@
-function [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(s, y)
+function [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(s, y, modelDim)
 % FIT_DOG_HALF_CDF Fit a Difference-of-Gaussians model using half-CDF functions
 %
 % DESCRIPTION:
@@ -11,10 +11,13 @@ function [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(s, y)
 %   y = gain * (half_cdf(s, mu, sigma_c) + w_s * half_cdf(s, mu, sigma_s)) + global_bias
 %   
 %   where half_cdf(s, mu, sigma) = max(0, normcdf(s, mu, sigma) - 0.5)
+%   For 2D-line accumulation (along diameter), we use an erf-based shape
+%   proportional to erf((D - mu) / (sqrt(2)*sigma)).
 %
 % INPUTS:
-%   s - stimulus sizes (vector)
+%   s - stimulus sizes (vector; spot diameters)
 %   y - neural responses (vector, same length as s)
+%   modelDim - optional model type: '1d' (default) or '2d' (line accumulation)
 %
 % OUTPUTS:
 %   s_fit    - fine-grained stimulus sizes for smooth curve
@@ -23,6 +26,7 @@ function [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(s, y)
 %              .mu (shared mean), .sigma_c (center std)
 %              .sigma_s (surround std)
 %              .w_s (surround weight, negative), .gain, .global_bias
+%              .modelDim ('1d' or '2d')
 %   fit_stats- structure with fitting statistics (.fval, .exitflag, .output)
 %
 % CONSTRAINTS:
@@ -30,6 +34,10 @@ function [s_fit, y_fit, p_struct, fit_stats] = fit_DoG_half_CDF(s, y)
 %   - sigma_s > sigma_c (surround broader than center)
 %   - w_s: negative (surround suppresses response)
 %   - gain: positive
+
+% PENALTIES (soft):
+%   - Overshoot penalty: model(s_i) > y_i discouraged (quadratic)
+%   - Sigma ratio penalty: encourage sigma_s >= 2 * sigma_c (quadratic if violated)
 %
 % AUTHOR: Generated for PreyCaptureRGC analysis
 % DATE: August 2025
@@ -51,22 +59,38 @@ if length(s) < 5
     error('Need at least 5 valid data points to fit 6 parameters');
 end
 
-% Define the half-CDF function
-half_cdf = @(x, mu, sigma) max(0, normcdf(x, mu, sigma) - 0.5);
+% Default model dimension
+if nargin < 3 || isempty(modelDim)
+    modelDim = '1d'; % options: '1d' (default) or '2d' (line accumulation)
+end
+
+% Define half-CDF helpers
+% 1D half-CDF (starts at mu): shape ~ 0.5*erf((D-mu)/(sqrt(2)*sigma))
+half1d = @(D, mu, sigma) max(0, normcdf(D, mu, sigma) - 0.5);
+% 2D line accumulation (integrate 2D Gaussian along a line from mu):
+% proportional to erf((D-mu)/(sqrt(2)*sigma)); same shape as 1D up to scale
+half2d_line = @(D, mu, sigma) max(0, erf((D - mu) ./ max(sqrt(2)*sigma, eps)) );
 
 % Define the full DoG half-CDF model
 % Parameters: [mu, sigma_c, sigma_s, w_s, gain, global_bias]
-model_fun = @(params, x) params(5) * (...
-    arrayfun(@(xi) half_cdf(xi, params(1), params(2)), x) + ...
-    params(4) * arrayfun(@(xi) half_cdf(xi, params(1), params(3)), x) ...
-    ) + params(6);
+if strcmpi(modelDim, '2d')
+    model_fun = @(params, x) params(5) * ( ...
+        half2d_line(x, params(1), params(2)) + params(4) * half2d_line(x, params(1), params(3)) ) ...
+        + params(6);
+else
+    model_fun = @(params, x) params(5) * ( ...
+        half1d(x, params(1), params(2)) + params(4) * half1d(x, params(1), params(3)) ) ...
+        + params(6);
+end
 
-% Objective function (sum of squared residuals with penalty)
-y_max = max(y);
-penalty_weight = 1000;  % Large penalty weight for overshooting
+% Objective function (sum of squared residuals with penalties)
+overshoot_lambda = 100;   % penalty weight for model exceeding data
+sigma_ratio_lambda = 200; % penalty weight for enforcing sigma_s >= 2*sigma_c
 
-objective = @(params) sum((y - model_fun(params, s)).^2) + ...
-    penalty_weight * sum(max(0, model_fun(params, s) - y_max).^2);
+objective = @(params) ...
+    sum((y - model_fun(params, s)).^2) + ... % SSE
+    overshoot_lambda * sum(max(0, model_fun(params, s) - y).^2) + ... % pointwise overshoot
+    sigma_ratio_lambda * max(0, 2*params(2) - params(3)).^2; % encourage sigma_s >= 2*sigma_c
 
 % Initial parameter estimates
 s_range = max(s) - min(s);
@@ -83,8 +107,8 @@ p0 = [mu_init, sigma_c_init, sigma_s_init, w_s_init, gain_init, bias_init];
 
 % Parameter bounds
 % [mu, sigma_c, sigma_s, w_s, gain, global_bias]
-lb = [0,             s_range*0,   s_range*0, -1, 0.01, -inf];
-ub = [s_range*0.00,  s_range,   s_range*10,   0,  inf,  inf];
+lb = [0,         max(s_range,eps)*0.01,  max(s_range,eps)*0.05, -1, 0.0,  -inf];
+ub = [max(s),    max(s)*2,               max(s)*10,              0,  inf,  inf];
 
 % Nonlinear constraints: sigma_s > sigma_c
 nonlcon = @(params) deal([], params(2) - params(3));  % sigma_c - sigma_s <= 0
@@ -117,6 +141,11 @@ p_struct.sigma_s = p_opt(3);
 p_struct.w_s = p_opt(4);
 p_struct.gain = p_opt(5);
 p_struct.global_bias = p_opt(6);
+if strcmpi(modelDim, '2d')
+    p_struct.modelDim = '2d';
+else
+    p_struct.modelDim = '1d';
+end
 
 
 % Generate smooth fitted curve, x starts at 0
