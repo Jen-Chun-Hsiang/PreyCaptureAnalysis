@@ -139,9 +139,9 @@ for g = 1:numel(groups)
     end
     
     % Configuration for spline interpolation and jittering
-    n_interp_points = 50;  % Number of interpolated points between min and max size
-    n_samples = 10;        % Number of jittered samples to generate
-    jitter_std = 0.01;     % Standard deviation of jitter (relative to response range)
+    n_interp_points = 10;  % Number of interpolated points between min and max size
+    n_samples = 1;        % Number of jittered samples to generate
+    jitter_std = 0.0;     % Standard deviation of jitter (relative to response range)
     
     for pf = 1:length(param_fields)
         cell_params.(param_fields{pf}) = nan(nCells, 1);
