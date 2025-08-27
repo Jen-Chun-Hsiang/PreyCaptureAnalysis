@@ -123,6 +123,7 @@ test_LNK_fitting
 PredictionResults( 3:6) = [corr(exp(:), r_hat(:)) corr(exp(:), r_hat_s(:)) corr(exp(:), sim(:)) corr(exp(:), sim_s(:))];
 LNK_params = prm;
 LNK_params_s = prm_s;
+LNK_params_c = prm_c;
 %%
 csim = sim;
 csim = csim*1e6;
@@ -170,7 +171,7 @@ for i = 1:2
 
     save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-        'BaselineCorr', 'LNK_params', 'LNK_params_s');
+        'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_c');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
 all_SC(ii) = LNK_params_s.w_xs;
