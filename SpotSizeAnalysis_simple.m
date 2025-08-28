@@ -8,7 +8,7 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'OFF';
+test_type = 'ON';
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple/';
@@ -434,6 +434,213 @@ if numel(groups) == 2 && all(isfield(results, groups))
     elseif p_val_between < 0.01
         fprintf(' **\n');
     elseif p_val_between < 0.05
+        fprintf(' *\n');
+    else
+        fprintf(' (n.s.)\n');
+    end
+end
+
+% ---------------- Optimal Spot Size Analysis ----------------
+% Calculate optimal spot size (80% of peak firing rate) for each group
+fprintf('\n========== OPTIMAL SPOT SIZE ANALYSIS ==========\n');
+
+optimal_results = struct();
+all_optimal_sizes = [];
+all_optimal_group_labels = [];
+
+for g = 1:numel(groups)
+    gname = groups{g};
+    if ~isfield(results, gname)
+        continue;
+    end
+    
+    fprintf('\nProcessing optimal spot size for group %s:\n', gname);
+    
+    % Get data for this group
+    sizes = results.(gname).sizes;
+    responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
+    n_cells = size(responses_matrix, 2);
+    
+    optimal_sizes = nan(n_cells, 1);
+    
+    for c = 1:n_cells
+        cell_responses = responses_matrix(:, c);
+        
+        % Skip if cell has too many NaN values
+        valid_responses = ~isnan(cell_responses);
+        if sum(valid_responses) < 3
+            continue;
+        end
+        
+        % Find peak response
+        peak_response = max(cell_responses, [], 'omitnan');
+        
+        % Calculate 80% of peak
+        target_response = 0.8 * peak_response;
+        
+        % Find the spot size that first reaches 80% of peak (ascending order)
+        target_reached = cell_responses >= target_response;
+        first_target_idx = find(target_reached, 1, 'first');
+        
+        if ~isempty(first_target_idx)
+            optimal_sizes(c) = sizes(first_target_idx);
+            
+            % Debug output for first few cells
+            if c <= 3
+                fprintf('  Cell %d: Peak=%.2f, 80%% target=%.2f, Optimal size=%d\n', ...
+                    c, peak_response, target_response, optimal_sizes(c));
+            end
+        end
+    end
+    
+    % Remove NaN values
+    valid_optimal = ~isnan(optimal_sizes);
+    valid_optimal_sizes = optimal_sizes(valid_optimal);
+    
+    fprintf('  Valid optimal size calculations: %d/%d cells\n', sum(valid_optimal), n_cells);
+    if ~isempty(valid_optimal_sizes)
+        fprintf('  Optimal size range: %d to %d μm\n', min(valid_optimal_sizes), max(valid_optimal_sizes));
+        fprintf('  Mean optimal size: %.1f ± %.1f μm (SEM)\n', mean(valid_optimal_sizes), std(valid_optimal_sizes)/sqrt(length(valid_optimal_sizes)));
+        
+        % Store results
+        optimal_results.(gname).optimal_sizes = optimal_sizes;
+        optimal_results.(gname).valid_optimal = valid_optimal;
+        optimal_results.(gname).mean_optimal = mean(valid_optimal_sizes);
+        optimal_results.(gname).sem_optimal = std(valid_optimal_sizes) / sqrt(length(valid_optimal_sizes));
+        optimal_results.(gname).std_optimal = std(valid_optimal_sizes);
+        optimal_results.(gname).n_cells = length(valid_optimal_sizes);
+        
+        % Collect data for combined plot
+        all_optimal_sizes = [all_optimal_sizes; valid_optimal_sizes];
+        all_optimal_group_labels = [all_optimal_group_labels; repmat(g, length(valid_optimal_sizes), 1)];
+    else
+        fprintf('  No valid optimal sizes calculated\n');
+    end
+end
+
+% ---------------- Optimal Spot Size Plotting ----------------
+if ~isempty(all_optimal_sizes)
+    figure('Color', 'w', 'Position', [300, 100, 800, 600]);
+    
+    % Calculate bar positions
+    group_positions = 1:numel(groups);
+    bar_width = 0.6;
+    
+    % Prepare data for bar plot
+    mean_optimal_values = nan(numel(groups), 1);
+    sem_optimal_values = nan(numel(groups), 1);
+    
+    for g = 1:numel(groups)
+        gname = groups{g};
+        if isfield(optimal_results, gname)
+            mean_optimal_values(g) = optimal_results.(gname).mean_optimal;
+            sem_optimal_values(g) = optimal_results.(gname).sem_optimal;
+        end
+    end
+    
+    % Create bar plot with error bars
+    hold on;
+    bars = bar(group_positions, mean_optimal_values, bar_width, 'FaceAlpha', 0.7, 'FaceColor', [0.5 0.8 0.5]);
+    
+    % Add error bars
+    errorbar(group_positions, mean_optimal_values, sem_optimal_values, 'k', 'LineStyle', 'none', ...
+        'LineWidth', 1.5, 'CapSize', 8);
+    
+    % Add individual data points
+    jitter_width = 0.15;
+    for g = 1:numel(groups)
+        gname = groups{g};
+        if isfield(optimal_results, gname)
+            valid_optimal_values = optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal);
+            
+            % Add jitter to x-positions
+            n_points = length(valid_optimal_values);
+            x_jitter = (rand(n_points, 1) - 0.5) * jitter_width * 2;
+            x_positions = repmat(group_positions(g), n_points, 1) + x_jitter;
+            
+            % Plot individual points
+            scatter(x_positions, valid_optimal_values, 40, [0.2 0.6 0.2], 'filled', ...
+                'MarkerEdgeColor', 'k', 'LineWidth', 0.5, 'MarkerFaceAlpha', 0.8);
+        end
+    end
+    
+    % Customize plot
+    xlim([0.5, numel(groups) + 0.5]);
+    xticks(group_positions);
+    xticklabels(strrep(groups, '_', '\_'));
+    xlabel('Cell Groups');
+    ylabel('Optimal Spot Size (μm)');
+    title('Optimal Spot Size (80% of Peak Response)');
+    grid on;
+    
+    % Add text annotation explaining calculation
+    annotation_text = sprintf('Optimal size = smallest spot size\nthat reaches 80%% of peak firing rate');
+    text(0.02, 0.98, annotation_text, 'Units', 'normalized', ...
+        'VerticalAlignment', 'top', 'HorizontalAlignment', 'left', ...
+        'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 9);
+    
+    % Add sample size information
+    for g = 1:numel(groups)
+        gname = groups{g};
+        if isfield(optimal_results, gname)
+            text(group_positions(g), mean_optimal_values(g) + sem_optimal_values(g) + 0.05*range(ylim), ...
+                sprintf('n=%d', optimal_results.(gname).n_cells), ...
+                'HorizontalAlignment', 'center', 'FontSize', 10, 'FontWeight', 'bold');
+        end
+    end
+    
+    hold off;
+    
+    % Save figure
+    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_%s.png', test_type)));
+    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_%s.fig', test_type)));
+    
+    fprintf('\nOptimal spot size figure saved as: OptimalSpotSize_%s.png\n', test_type);
+end
+
+% ---------------- Optimal Spot Size Statistics ----------------
+fprintf('\n========== OPTIMAL SPOT SIZE SUMMARY ==========\n');
+for g = 1:numel(groups)
+    gname = groups{g};
+    if isfield(optimal_results, gname)
+        fprintf('\n%s:\n', gname);
+        fprintf('  n = %d cells\n', optimal_results.(gname).n_cells);
+        fprintf('  Mean optimal size = %.1f ± %.1f μm (SEM)\n', optimal_results.(gname).mean_optimal, optimal_results.(gname).sem_optimal);
+        fprintf('  Std optimal size = %.1f μm\n', optimal_results.(gname).std_optimal);
+        
+        % Test distribution of optimal sizes
+        valid_optimal_values = optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal);
+        fprintf('  Range: %d - %d μm\n', min(valid_optimal_values), max(valid_optimal_values));
+        fprintf('  Median: %.1f μm\n', median(valid_optimal_values));
+    end
+end
+
+% Statistical comparison between groups for optimal sizes
+if numel(groups) == 2 && all(isfield(optimal_results, groups))
+    fprintf('\n========== OPTIMAL SIZE BETWEEN-GROUP COMPARISON ==========\n');
+    group1_optimal = optimal_results.(groups{1}).optimal_sizes(optimal_results.(groups{1}).valid_optimal);
+    group2_optimal = optimal_results.(groups{2}).optimal_sizes(optimal_results.(groups{2}).valid_optimal);
+    
+    [~, p_val_optimal] = ttest2(group1_optimal, group2_optimal);
+    fprintf('t-test between %s and %s: p = %.4f', groups{1}, groups{2}, p_val_optimal);
+    if p_val_optimal < 0.001
+        fprintf(' ***\n');
+    elseif p_val_optimal < 0.01
+        fprintf(' **\n');
+    elseif p_val_optimal < 0.05
+        fprintf(' *\n');
+    else
+        fprintf(' (n.s.)\n');
+    end
+    
+    % Also perform Mann-Whitney U test (non-parametric)
+    p_val_mw = ranksum(group1_optimal, group2_optimal);
+    fprintf('Mann-Whitney U test: p = %.4f', p_val_mw);
+    if p_val_mw < 0.001
+        fprintf(' ***\n');
+    elseif p_val_mw < 0.01
+        fprintf(' **\n');
+    elseif p_val_mw < 0.05
         fprintf(' *\n');
     else
         fprintf(' (n.s.)\n');
