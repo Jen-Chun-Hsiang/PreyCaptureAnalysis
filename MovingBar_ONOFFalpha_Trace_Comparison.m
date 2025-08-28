@@ -50,7 +50,7 @@ for i = 1:num_set
     end
 end
 
-%%
+%% Load fitted parameters from White Noise for LN model
 process_version = 'GaussianFitting_processed_082025_1.mat';
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite';
 processedFile = fullfile(folder_name, process_version);
@@ -83,11 +83,123 @@ for i = 1:num_set
     end
 end
 fprintf('Check session completed.\n');
+
+cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
+location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
+
+%% Plot Cdat (4th and 5th columns) and Cbas
+if is_show_fitted
+    % Define groups
+    groups = {'ON-Temporal', 'ON-Nasal', 'OFF-Temporal', 'OFF-Nasal'};
+    group_indices = {
+        cell_type_numeric == 1 & location_type_numeric == 1; ... % ON-Temporal
+        cell_type_numeric == 1 & location_type_numeric == 0; ... % ON-Nasal
+        cell_type_numeric == 0 & location_type_numeric == 1; ... % OFF-Temporal
+        cell_type_numeric == 0 & location_type_numeric == 0  ... % OFF-Nasal
+    };
+    
+    % Figure for Cdat and Cbas
+    figure('Name', 'Model Performance Comparison');
+    for g = 1:4
+        subplot(2, 2, g);
+        hold on;
+        
+        % Get data for this group
+        group_mask = group_indices{g};
+        if sum(group_mask) == 0
+            title([groups{g} ' (n=0)']);
+            continue;
+        end
+        
+        group_cbas = Cbas(group_mask);
+        group_cdat_ln = Cdat(group_mask, 3);    % 3rd column: LN
+        group_cdat_lnk = Cdat(group_mask, 4);   % 4th column: LNK
+        
+        % Sort by Cbas in descending order
+        [sorted_cbas, sort_idx] = sort(group_cbas, 'descend');
+        sorted_cdat_ln = group_cdat_ln(sort_idx);
+        sorted_cdat_lnk = group_cdat_lnk(sort_idx);
+        
+        x_vals = 1:length(sorted_cbas);
+        
+        % Plot lines
+        plot(x_vals, sorted_cbas, 'k-', 'LineWidth', 2, 'DisplayName', 'Repeat reliability');
+        plot(x_vals, sorted_cdat_ln, 'b-', 'LineWidth', 2, 'DisplayName', 'LN');
+        plot(x_vals, sorted_cdat_lnk, 'r-', 'LineWidth', 2, 'DisplayName', 'LNK');
+        
+        xlabel('Cell (sorted by repeat reliability)');
+        ylabel('Correlation coefficient');
+        title([groups{g} ' (n=' num2str(sum(group_mask)) ')']);
+        ylim([0 1]);
+        legend('Location', 'best');
+        grid on;
+    end
+    sgtitle('Model Performance: LN vs LNK vs Repeat Reliability');
+    
+    % Figure for Csw (bar chart) - 2 subplots for ON/OFF with grouped bars
+    figure('Name', 'Subunit Weights (Csw)');
+    
+    % Define cell types and locations
+    cell_types = {'ON', 'OFF'};
+    locations = {'Temporal', 'Nasal'};
+    colors = [0.4 0.6 0.8; 0.8 0.4 0.6]; % Colors for Temporal and Nasal
+    
+    for ct = 1:2 % Loop through ON and OFF
+        subplot(1, 2, ct);
+        
+        % Get data for each location within this cell type
+        temporal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 1);
+        nasal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 0);
+        
+        temporal_csw = Csw(temporal_mask);
+        nasal_csw = Csw(nasal_mask);
+        
+        % Prepare data for grouped bar chart
+        max_cells = max(length(temporal_csw), length(nasal_csw));
+        
+        if max_cells == 0
+            title([cell_types{ct} ' (n=0)']);
+            continue;
+        end
+        
+        % Pad shorter array with NaN
+        temporal_padded = [temporal_csw; NaN(max_cells - length(temporal_csw), 1)];
+        nasal_padded = [nasal_csw; NaN(max_cells - length(nasal_csw), 1)];
+        
+        % Create grouped bar chart
+        bar_data = [temporal_padded, nasal_padded];
+        bars = bar(bar_data, 'grouped');
+        
+        % Set colors
+        bars(1).FaceColor = colors(1, :); % Temporal
+        bars(2).FaceColor = colors(2, :); % Nasal
+        
+        hold on;
+        
+        % Add scatter points on top of bars
+        x_temporal = bars(1).XEndPoints;
+        x_nasal = bars(2).XEndPoints;
+        
+        % Remove NaN values for scatter
+        valid_temporal = ~isnan(temporal_padded);
+        valid_nasal = ~isnan(nasal_padded);
+        
+        scatter(x_temporal(valid_temporal), temporal_padded(valid_temporal), 30, 'k', 'filled');
+        scatter(x_nasal(valid_nasal), nasal_padded(valid_nasal), 30, 'k', 'filled');
+        
+        xlabel('Cell');
+        ylabel('Subunit Weight');
+        title([cell_types{ct} ' (Temporal: n=' num2str(sum(temporal_mask)) ...
+               ', Nasal: n=' num2str(sum(nasal_mask)) ')']);
+        legend({'Temporal', 'Nasal'}, 'Location', 'best');
+        grid on;
+    end
+    sgtitle('Subunit Weights by Cell Type and Location');
+end
+
 %
 keyboard;
 %%
-cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
-location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
 %%
 if is_show_fitted
     is_blurry = 0;
