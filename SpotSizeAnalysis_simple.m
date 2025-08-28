@@ -247,6 +247,110 @@ else
     warning('No valid SI values calculated for any group.');
 end
 
+% ---------------- Individual Cell Traces Plot ----------------
+% Create figure showing each cell trace of mean as function of spot size
+if ~isempty(all_SI_values)
+    figure('Color', 'w', 'Position', [200, 100, 1200, 600]);
+    
+    n_groups = numel(groups);
+    
+    for g = 1:n_groups
+        gname = groups{g};
+        if ~isfield(results, gname)
+            continue;
+        end
+        
+        % Create subplot for this group
+        subplot(1, n_groups, g);
+        
+        % Get data for this group
+        sizes = results.(gname).sizes;
+        responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
+        n_cells = size(responses_matrix, 2);
+        
+        % Plot each cell's response curve
+        hold on;
+        colors = lines(n_cells);  % Different color for each cell
+        
+        for c = 1:n_cells
+            cell_responses = responses_matrix(:, c);
+            
+            % Only plot if cell has valid responses (not all NaN)
+            if any(~isnan(cell_responses))
+                plot(sizes, cell_responses, '-o', 'Color', colors(c,:), ...
+                     'LineWidth', 1.5, 'MarkerSize', 6, 'MarkerFaceColor', colors(c,:), ...
+                     'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
+            end
+        end
+        
+        % Calculate and plot group mean
+        mean_responses = mean(responses_matrix, 2, 'omitnan');
+        sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
+        
+        % Plot mean with error bars
+        errorbar(sizes, mean_responses, sem_responses, 'k-', 'LineWidth', 3, ...
+                 'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+        
+        hold off;
+        
+        % Customize subplot
+        xlabel('Spot Size (μm)');
+        ylabel('Mean Response (spikes/s)');
+        title(strrep(gname, '_', '\_'), 'FontSize', 12, 'FontWeight', 'bold');
+        grid on;
+        
+        % Set x-axis to log scale if sizes span large range
+        if max(sizes) / min(sizes) > 10
+            set(gca, 'XScale', 'log');
+            xticks(sizes);
+            xticklabels(arrayfun(@num2str, sizes, 'UniformOutput', false));
+        end
+        
+        % Add vertical lines to highlight size categories
+        y_limits = ylim;
+        
+        % Mark large sizes used for S calculation
+        for ls = large_sizes
+            if any(sizes == ls)
+                xline(ls, 'r--', 'LineWidth', 2, 'Alpha', 0.7);
+            end
+        end
+        
+        % Mark small size threshold
+        xline(small_size_threshold, 'b--', 'LineWidth', 2, 'Alpha', 0.7);
+        
+        % Add legend for the first subplot
+        if g == 1
+            legend_entries = cell(n_cells + 1, 1);
+            for c = 1:n_cells
+                legend_entries{c} = sprintf('Cell %d', c);
+            end
+            legend_entries{end} = 'Group Mean ± SEM';
+            legend(legend_entries, 'Location', 'best', 'FontSize', 8);
+            
+            % Add text box explaining line meanings
+            text(0.02, 0.98, sprintf('Red dashed: Large sizes (%s)\nBlue dashed: Small size threshold (<%d)', ...
+                mat2str(large_sizes), small_size_threshold), ...
+                'Units', 'normalized', 'VerticalAlignment', 'top', ...
+                'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 8);
+        end
+        
+        % Add sample size to title
+        title(sprintf('%s (n=%d)', strrep(gname, '_', '\_'), n_cells), ...
+              'FontSize', 12, 'FontWeight', 'bold');
+    end
+    
+    % Add overall title
+    sgtitle(sprintf('Individual Cell Responses vs Spot Size (%s)', test_type), ...
+            'FontSize', 14, 'FontWeight', 'bold');
+    
+    % Save figure
+    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_IndividualTraces_%s.png', test_type)));
+    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_IndividualTraces_%s.fig', test_type)));
+    
+    fprintf('Individual traces figure saved as: SpotSizeAnalysis_IndividualTraces_%s.png\n', test_type);
+end
+
 % ---------------- Summary Statistics ----------------
 fprintf('\n========== SIZE INDEX SUMMARY ==========\n');
 for g = 1:numel(groups)
