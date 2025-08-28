@@ -8,7 +8,8 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'ON';
+test_type = 'OFF';
+percent_peak = 0.85;
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple/';
@@ -441,8 +442,8 @@ if numel(groups) == 2 && all(isfield(results, groups))
 end
 
 % ---------------- Optimal Spot Size Analysis ----------------
-% Calculate optimal spot size (80% of peak firing rate) for each group
-fprintf('\n========== OPTIMAL SPOT SIZE ANALYSIS ==========\n');
+% Calculate optimal spot size (specified percentage of peak firing rate) for each group
+fprintf('\n========== OPTIMAL SPOT SIZE ANALYSIS (%.0f%% of Peak) ==========\n', percent_peak*100);
 
 optimal_results = struct();
 all_optimal_sizes = [];
@@ -475,10 +476,10 @@ for g = 1:numel(groups)
         % Find peak response
         peak_response = max(cell_responses, [], 'omitnan');
         
-        % Calculate 80% of peak
-        target_response = 0.8 * peak_response;
+        % Calculate specified percentage of peak
+        target_response = percent_peak * peak_response;
         
-        % Find the spot size that first reaches 80% of peak (ascending order)
+        % Find the spot size that first reaches the target percentage of peak (ascending order)
         target_reached = cell_responses >= target_response;
         first_target_idx = find(target_reached, 1, 'first');
         
@@ -487,8 +488,8 @@ for g = 1:numel(groups)
             
             % Debug output for first few cells
             if c <= 3
-                fprintf('  Cell %d: Peak=%.2f, 80%% target=%.2f, Optimal size=%d\n', ...
-                    c, peak_response, target_response, optimal_sizes(c));
+                fprintf('  Cell %d: Peak=%.2f, %.0f%% target=%.2f, Optimal size=%d\n', ...
+                    c, peak_response, percent_peak*100, target_response, optimal_sizes(c));
             end
         end
     end
@@ -570,11 +571,11 @@ if ~isempty(all_optimal_sizes)
     xticklabels(strrep(groups, '_', '\_'));
     xlabel('Cell Groups');
     ylabel('Optimal Spot Size (μm)');
-    title('Optimal Spot Size (80% of Peak Response)');
+    title(sprintf('Optimal Spot Size (%.0f%% of Peak Response)', percent_peak*100));
     grid on;
     
     % Add text annotation explaining calculation
-    annotation_text = sprintf('Optimal size = smallest spot size\nthat reaches 80%% of peak firing rate');
+    annotation_text = sprintf('Optimal size = smallest spot size\nthat reaches %.0f%% of peak firing rate', percent_peak*100);
     text(0.02, 0.98, annotation_text, 'Units', 'normalized', ...
         'VerticalAlignment', 'top', 'HorizontalAlignment', 'left', ...
         'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 9);
@@ -599,7 +600,7 @@ if ~isempty(all_optimal_sizes)
 end
 
 % ---------------- Optimal Spot Size Statistics ----------------
-fprintf('\n========== OPTIMAL SPOT SIZE SUMMARY ==========\n');
+fprintf('\n========== OPTIMAL SPOT SIZE SUMMARY (%.0f%% of Peak) ==========\n', percent_peak*100);
 for g = 1:numel(groups)
     gname = groups{g};
     if isfield(optimal_results, gname)
