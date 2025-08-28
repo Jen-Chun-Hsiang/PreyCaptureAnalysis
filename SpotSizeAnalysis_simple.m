@@ -8,7 +8,7 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'ON';
+test_type = 'OFF';
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple/';
@@ -24,11 +24,12 @@ end
 switch test_type
     case 'ON'
         groups = {'AcuteZoneDT_ONSus_RF_GRN','DN_ONSus_RF_GRN'};  % edit/extend as needed
-        % stim_idx = 101:300;  % during-stimulus period
-        stim_idx = 101:350;  % during-stimulus period
+        stim_idx = 110:300;  % during-stimulus period
+        % stim_idx = 110:150;  % during-stimulus period
     case 'OFF'  
         groups = {'AcuteZoneDT_OFFSus_RF_GRN','DN_OFFSus_RF_GRN'};  % edit/extend as needed
-        stim_idx = 301:500;  % during-stimulus period
+        stim_idx = 310:500;  % during-stimulus period
+        % stim_idx = 310:350;  % during-stimulus period
 end
 sizes = a.y_labels(:)';                  % diameter labels
 nSizes = numel(sizes);
@@ -106,19 +107,62 @@ for g = 1:numel(groups)
         S_responses = cell_responses(large_size_indices);
         S_mean = mean(S_responses, 'omitnan');
         
-        % Calculate C: mean of top two responses from small sizes
+        % Calculate C: peak response and closest larger adjacent response from small sizes
         C_responses = cell_responses(small_size_indices);
-        C_responses_sorted = sort(C_responses, 'descend', 'MissingPlacement', 'last');
+        small_sizes_for_this_cell = sorted_sizes(small_size_indices);
         
-        % Take top 2 valid (non-NaN) responses
-        valid_C = C_responses_sorted(~isnan(C_responses_sorted));
-        if length(valid_C) >= 2
-            C_mean = mean(valid_C(1:2));
-        elseif length(valid_C) == 1
-            C_mean = valid_C(1);
-            fprintf('  Cell %d: Only 1 valid small size response\n', c);
+        % Remove NaN values for peak finding
+        valid_indices = ~isnan(C_responses);
+        if sum(valid_indices) < 2
+            fprintf('  Cell %d: Less than 2 valid small size responses, skipping\n', c);
+            continue;
+        end
+        
+        valid_C_responses = C_responses(valid_indices);
+        valid_small_sizes = small_sizes_for_this_cell(valid_indices);
+        
+        % Find peak response
+        [peak_value, peak_idx] = max(valid_C_responses);
+        peak_size = valid_small_sizes(peak_idx);
+        
+        % Find adjacent spot sizes to the peak
+        peak_size_original_idx = find(sorted_sizes == peak_size);
+        
+        % Look for adjacent sizes (both smaller and larger than peak)
+        adjacent_responses = [];
+        adjacent_info = {};
+        
+        % Check size immediately before peak (if exists and < small_size_threshold)
+        if peak_size_original_idx > 1
+            prev_size = sorted_sizes(peak_size_original_idx - 1);
+            if prev_size < small_size_threshold && ~isnan(cell_responses(peak_size_original_idx - 1))
+                adjacent_responses(end+1) = cell_responses(peak_size_original_idx - 1);
+                adjacent_info{end+1} = sprintf('size %d (smaller)', prev_size);
+            end
+        end
+        
+        % Check size immediately after peak (if exists and < small_size_threshold)
+        if peak_size_original_idx < length(sorted_sizes)
+            next_size = sorted_sizes(peak_size_original_idx + 1);
+            if next_size < small_size_threshold && ~isnan(cell_responses(peak_size_original_idx + 1))
+                adjacent_responses(end+1) = cell_responses(peak_size_original_idx + 1);
+                adjacent_info{end+1} = sprintf('size %d (larger)', next_size);
+            end
+        end
+        
+        % Calculate C_mean based on available adjacent responses
+        if length(adjacent_responses) >= 1
+            % Choose the largest adjacent response
+            [largest_adjacent, largest_idx] = max(adjacent_responses);
+            C_mean = (peak_value + largest_adjacent) / 2;
+            
+            % Debug info for first few cells
+            if c <= 3
+                fprintf('  Cell %d: Peak=%.2f at size %d, Adjacent=%.2f (%s), C_mean=%.2f\n', ...
+                    c, peak_value, peak_size, largest_adjacent, adjacent_info{largest_idx}, C_mean);
+            end
         else
-            fprintf('  Cell %d: No valid small size responses, skipping\n', c);
+            fprintf('  Cell %d: No valid adjacent responses to peak, skipping\n', c);
             continue;
         end
         
@@ -220,7 +264,8 @@ if ~isempty(all_SI_values)
     % Add text annotation explaining SI calculation
     annotation_text = sprintf(['SI = (S - C) / C\n' ...
         'S = mean response to spots %s\n' ...
-        'C = mean of top 2 responses to spots < %d'], ...
+        'C = mean of peak response and largest adjacent response\n' ...
+        'for spots < %d'], ...
         mat2str(large_sizes), small_size_threshold);
     
     text(0.02, 0.98, annotation_text, 'Units', 'normalized', ...
