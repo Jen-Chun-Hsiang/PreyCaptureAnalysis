@@ -36,15 +36,17 @@ num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
 Cdat = nan(num_set, 2, 2);
 Cbas = nan(num_set, 2);
+Csw = nan(num_set, 1);
 implement_case_id = 6;
 for i = 1:num_set
     file_name = sprintf('%s_moving_bar_processed.mat', data_sets{i});
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
         file_name = sprintf('%s_%d_moving_bar_fitted.mat', data_sets{i}, implement_case_id);
-        load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr');
+        load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s');
         Cdat(i, :, :) = PredictionResults;
         Cbas(i, :) = BaselineCorr;
+        Csw(i, :) = LNK_params_s.w_xs;
     end
 end
 
