@@ -11,13 +11,55 @@ recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101
 
 Fz = 100;
 num_recording = length(recording_sets);
-all_corr = nan(num_recording, 7);
+all_corr = nan(num_recording, 8);
 all_SC = nan(num_recording, 1);
+is_plot = 0;
+
+%%
+process_version = 'GaussianFitting_processed_082025_1.mat';
+folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite';
+processedFile = fullfile(folder_name, process_version);
+
+if exist(processedFile, 'file')
+    WN = load(processedFile,'data_sets', 'cell_type', 'location');
+    fprintf('Loaded fitted parameters for LN model\n');
+else
+    error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
+end
+ON_Nasal_CSR = 0.09;
+ON_Temporal_CSR = 0.12;
+OFF_Nasal_CSR = 0.08;
+OFF_Temporal_CSR = 0.11;
+%%
 for ii = 1:num_recording
     recording_name = recording_sets{ii};
-    PredictionResults = nan(1, 4);
+    PredictionResults = nan(1, 7);
     BaselineCorr = nan(1, 1);
     clear PredTraces
+    
+    % Find corresponding WN data for this recording
+    wn_idx = find(strcmp(WN.data_sets, recording_name));
+    if isempty(wn_idx)
+        error('Recording %s not found in WN data, skipping CSR constraint', recording_name);
+    else
+        current_cell_type = WN.cell_type{wn_idx};
+        current_location = WN.location{wn_idx};
+        
+        % Determine CSR value based on cell type and location
+        if strcmp(current_cell_type, 'ON') && strcmp(current_location, 'Nasal')
+            current_CSR = ON_Nasal_CSR;
+        elseif strcmp(current_cell_type, 'ON') && strcmp(current_location, 'Temporal')
+            current_CSR = ON_Temporal_CSR;
+        elseif strcmp(current_cell_type, 'OFF') && strcmp(current_location, 'Nasal')
+            current_CSR = OFF_Nasal_CSR;
+        elseif strcmp(current_cell_type, 'OFF') && strcmp(current_location, 'Temporal')
+            current_CSR = OFF_Temporal_CSR;
+        else
+            warning('Unknown cell type (%s) or location (%s) for %s, using default CSR', ...
+                    current_cell_type, current_location, recording_name);
+            current_CSR = 0.09; % default value
+        end
+    end
     switch recording_name
         case 'e100724'
             stim_wn_id = '003';
@@ -136,7 +178,28 @@ for ii = 1:num_recording
             stim_mb_id = '004';
             bar_type = 'ON';
     end
+    
+    % Sanity check: bar_type should match WN.cell_type
+    if ~isempty(wn_idx)
+        if ~strcmp(bar_type, current_cell_type)
+            error('SANITY CHECK FAILED: bar_type (%s) does not match WN.cell_type (%s) for recording %s', ...
+                    bar_type, current_cell_type, recording_name);
+        else
+            fprintf('Sanity check passed for %s: %s %s cell, using CSR = %.3f\n', ...
+                    recording_name, current_cell_type, current_location, current_CSR);
+        end
+    end
     response_name = recording_name;
     load_recording_name = recording_name;
+    
+    % Pass CSR value to the fitting script
+    if ~isempty(wn_idx)
+        CSR_value = current_CSR;
+        fprintf('Using CSR = %.3f for %s (%s %s)\n', CSR_value, recording_name, current_cell_type, current_location);
+    else
+        CSR_value = 0.09; % default value
+        fprintf('Using default CSR = %.3f for %s (WN data not found)\n', CSR_value, recording_name);
+    end
+    
     MovingBar_LinearNL_Fitting
 end

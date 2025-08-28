@@ -56,7 +56,7 @@ folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptur
 processedFile = fullfile(folder_name, process_version);
 
 if exist(processedFile, 'file')
-    WN = load(processedFile, 'gauss_est', 'Gauss_TF_est', 'data_sets');
+    WN = load(processedFile, 'gauss_est', 'Gauss_TF_est', 'data_sets', 'cell_type', 'location');
     fprintf('Loaded fitted parameters for LN model\n');
 else
     error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
@@ -67,7 +67,7 @@ for i = 1:num_set
     ds_name = data_sets{i};
     wn_idx = find(strcmp(ds_name, WN.data_sets));
     if isempty(wn_idx)
-        fprintf('WARNING: %s not found in WN.data_sets\n', ds_name);
+        error('WARNING: %s not found in WN.data_sets\n', ds_name);
         continue;
     end
     % If WN contains cell_type and location fields, compare them
@@ -75,11 +75,15 @@ for i = 1:num_set
         if ~strcmp(cell_type{i}, WN.cell_type{wn_idx})
             fprintf('Mismatch in cell_type for %s: %s (main) vs %s (WN)\n', ds_name, cell_type{i}, WN.cell_type{wn_idx});
         end
+    else
+        error('WN data does not contain cell_type field');
     end
     if isfield(WN, 'location')
         if ~strcmp(location{i}, WN.location{wn_idx})
             fprintf('Mismatch in location for %s: %s (main) vs %s (WN)\n', ds_name, location{i}, WN.location{wn_idx});
         end
+    else
+        error('WN data does not contain location field');
     end
 end
 fprintf('Check session completed.\n');
