@@ -76,7 +76,7 @@ lb = [ ...
     log(1e-9);  % sigma0
     log(1e-9);  % alpha
     -10;        % beta
-    -10;        % b_out
+    -100;        % b_out
     log(1e-9);  % g_out
     log(1);     % theta+1
     -2;         % w_xs (suppressive by default)
@@ -92,7 +92,7 @@ ub = [ ...
     log(10);            % sigma0
     log(10);            % alpha
     10;                 % beta
-    10;                 % b_out
+    100;                 % b_out
     log(100);           % g_out
     log(max(x)+1+eps);  % theta+1
     0;                  % w_xs
@@ -104,6 +104,7 @@ ub = [ ...
 ];
 
 if haveCON
+    disp('Using fmincon');
     o = optimoptions('fmincon','Display','off','Algorithm','sqp','MaxIterations',opts.MaxIter);
     [p_hat,fval] = fmincon(obj, p0, [],[],[],[],lb,ub,[], o);
 else

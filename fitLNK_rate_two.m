@@ -1,9 +1,10 @@
 function [params, rate_hat, a_traj, fval] = fitLNK_rate_two(x, x_s, y_rate, dt, varargin)
-% fitLNK_rate_with_xs  Fit a 1-state LNK model with an additional input x_s.
+% fitLNK_rate_two  Fit a 1-state LNK model with an additional input x_s.
 %
 % Model (discrete time, single kinetic state):
 %   a_{t+1} = a_t + dt * (alpha_d * F(x_t) - a_t) / tau,  with F(x) = max(0, x - theta)
-%   ỹ_t     = x_t + w_xs * x_s_t + [other terms as in LNK]
+%   den_t   = sigma0 + alpha * a_t
+%   ỹ_t     = x_t / den_t + w_xs * x_s_t / den_t + beta * a_t + b_out
 %   r_t     = outNL( g_out * ỹ_t )   (default outNL = softplus)
 %
 % INPUTS
@@ -58,7 +59,7 @@ obj = @(p) objectiveAnalog_xs(p, x, x_s, y_rate, dt, opts);
 haveCON  = exist('fmincon','file')==2;
 
 lb = [log(1e-3); log(1e-6); log(1e-6); log(1e-6); -10; -10; log(1e-6); log(1); -2];
-ub = [log(10);   log(10);   log(10);   log(10);   10;   10;   log(100);  log(max(x)+1); 0];
+ub = [log(10);   log(10);   log(10);   log(10);   10;   10;   log(100);  log(max(x)+1); -0];
 
 if haveCON
     o = optimoptions('fmincon','Display','off','Algorithm','sqp','MaxIterations',opts.MaxIter);

@@ -136,7 +136,7 @@ if is_show_fitted
     end
     sgtitle('Model Performance: LN vs LNK vs Repeat Reliability');
     
-    % Figure for Csw (bar chart) - 2 subplots for ON/OFF with grouped bars
+    % Figure for Csw (bar chart) - 2 subplots for ON/OFF with 2 bars each (Temporal vs Nasal averages)
     figure('Name', 'Subunit Weights (Csw)');
     
     % Define cell types and locations
@@ -154,47 +154,192 @@ if is_show_fitted
         temporal_csw = Csw(temporal_mask);
         nasal_csw = Csw(nasal_mask);
         
-        % Prepare data for grouped bar chart
-        max_cells = max(length(temporal_csw), length(nasal_csw));
-        
-        if max_cells == 0
-            title([cell_types{ct} ' (n=0)']);
-            continue;
+        % Remove outliers using interquartile range method
+        if length(temporal_csw) > 0
+            Q1_t = prctile(temporal_csw, 25);
+            Q3_t = prctile(temporal_csw, 75);
+            IQR_t = Q3_t - Q1_t;
+            temporal_csw_clean = temporal_csw(temporal_csw >= Q1_t - 1.5*IQR_t & temporal_csw <= Q3_t + 1.5*IQR_t);
+        else
+            temporal_csw_clean = [];
         end
         
-        % Pad shorter array with NaN
-        temporal_padded = [temporal_csw; NaN(max_cells - length(temporal_csw), 1)];
-        nasal_padded = [nasal_csw; NaN(max_cells - length(nasal_csw), 1)];
+        if length(nasal_csw) > 0
+            Q1_n = prctile(nasal_csw, 25);
+            Q3_n = prctile(nasal_csw, 75);
+            IQR_n = Q3_n - Q1_n;
+            nasal_csw_clean = nasal_csw(nasal_csw >= Q1_n - 1.5*IQR_n & nasal_csw <= Q3_n + 1.5*IQR_n);
+        else
+            nasal_csw_clean = [];
+        end
         
-        % Create grouped bar chart
-        bar_data = [temporal_padded, nasal_padded];
-        bars = bar(bar_data, 'grouped');
+        % Calculate means
+        mean_temporal = mean(temporal_csw_clean);
+        mean_nasal = mean(nasal_csw_clean);
         
-        % Set colors
-        bars(1).FaceColor = colors(1, :); % Temporal
-        bars(2).FaceColor = colors(2, :); % Nasal
+        % Calculate standard errors
+        se_temporal = std(temporal_csw_clean) / sqrt(length(temporal_csw_clean));
+        se_nasal = std(nasal_csw_clean) / sqrt(length(nasal_csw_clean));
+        
+        if isnan(mean_temporal), mean_temporal = 0; se_temporal = 0; end
+        if isnan(mean_nasal), mean_nasal = 0; se_nasal = 0; end
+        
+        % Create bar chart with only 2 bars
+        bar_data = [mean_temporal, mean_nasal];
+        error_data = [se_temporal, se_nasal];
+        
+        bars = bar(bar_data);
+        bars.FaceColor = 'flat';
+        bars.CData(1,:) = colors(1, :); % Temporal
+        bars.CData(2,:) = colors(2, :); % Nasal
         
         hold on;
         
-        % Add scatter points on top of bars
-        x_temporal = bars(1).XEndPoints;
-        x_nasal = bars(2).XEndPoints;
+        % Add error bars
+        errorbar(1:2, bar_data, error_data, 'k', 'LineStyle', 'none', 'LineWidth', 1.5);
         
-        % Remove NaN values for scatter
-        valid_temporal = ~isnan(temporal_padded);
-        valid_nasal = ~isnan(nasal_padded);
+        % Add individual data points as scatter
+        x_temporal = ones(size(temporal_csw_clean)) + 0.1*randn(size(temporal_csw_clean))*0.1; % Add small jitter
+        x_nasal = 2*ones(size(nasal_csw_clean)) + 0.1*randn(size(nasal_csw_clean))*0.1;
         
-        scatter(x_temporal(valid_temporal), temporal_padded(valid_temporal), 30, 'k', 'filled');
-        scatter(x_nasal(valid_nasal), nasal_padded(valid_nasal), 30, 'k', 'filled');
+        scatter(x_temporal, temporal_csw_clean, 30, 'k', 'filled', 'MarkerFaceAlpha', 0.6);
+        scatter(x_nasal, nasal_csw_clean, 30, 'k', 'filled', 'MarkerFaceAlpha', 0.6);
         
-        xlabel('Cell');
+        % Formatting
+        set(gca, 'XTick', 1:2, 'XTickLabel', locations);
         ylabel('Subunit Weight');
-        title([cell_types{ct} ' (Temporal: n=' num2str(sum(temporal_mask)) ...
-               ', Nasal: n=' num2str(sum(nasal_mask)) ')']);
-        legend({'Temporal', 'Nasal'}, 'Location', 'best');
+        title([cell_types{ct} ' (Temporal: n=' num2str(length(temporal_csw_clean)) ...
+               '/' num2str(sum(temporal_mask)) ', Nasal: n=' num2str(length(nasal_csw_clean)) ...
+               '/' num2str(sum(nasal_mask)) ')']);
         grid on;
+        
+        % Set y-axis limits to show data nicely
+        all_data = [temporal_csw_clean; nasal_csw_clean];
+        % if ~isempty(all_data)
+        %     ylim([0, max(all_data)*1.2]);
+        % end
     end
-    sgtitle('Subunit Weights by Cell Type and Location');
+    sgtitle('Average Subunit Weights by Cell Type and Location (Outliers Removed)');
+    
+    %% Statistical Testing for Subunit Weights
+    fprintf('\n=== STATISTICAL ANALYSIS OF SUBUNIT WEIGHTS ===\n');
+    
+    % Prepare data for statistical testing
+    stat_results = struct();
+    
+    for ct = 1:2 % Loop through ON and OFF
+        cell_type_name = cell_types{ct};
+        fprintf('\n--- %s CELLS ---\n', upper(cell_type_name));
+        
+        % Get data for each location within this cell type
+        temporal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 1);
+        nasal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 0);
+        
+        temporal_csw = Csw(temporal_mask);
+        nasal_csw = Csw(nasal_mask);
+        
+        % Remove outliers using same method as in plotting
+        if length(temporal_csw) > 0
+            Q1_t = prctile(temporal_csw, 25);
+            Q3_t = prctile(temporal_csw, 75);
+            IQR_t = Q3_t - Q1_t;
+            temporal_csw_clean = temporal_csw(temporal_csw >= Q1_t - 1.5*IQR_t & temporal_csw <= Q3_t + 1.5*IQR_t);
+        else
+            temporal_csw_clean = [];
+        end
+        
+        if length(nasal_csw) > 0
+            Q1_n = prctile(nasal_csw, 25);
+            Q3_n = prctile(nasal_csw, 75);
+            IQR_n = Q3_n - Q1_n;
+            nasal_csw_clean = nasal_csw(nasal_csw >= Q1_n - 1.5*IQR_n & nasal_csw <= Q3_n + 1.5*IQR_n);
+        else
+            nasal_csw_clean = [];
+        end
+        
+        % Store cleaned data
+        stat_results.(sprintf('%s_temporal', lower(cell_type_name))) = temporal_csw_clean;
+        stat_results.(sprintf('%s_nasal', lower(cell_type_name))) = nasal_csw_clean;
+        
+        % Descriptive statistics
+        fprintf('Temporal: n=%d, mean=%.4f, std=%.4f, median=%.4f\n', ...
+            length(temporal_csw_clean), mean(temporal_csw_clean), std(temporal_csw_clean), median(temporal_csw_clean));
+        fprintf('Nasal: n=%d, mean=%.4f, std=%.4f, median=%.4f\n', ...
+            length(nasal_csw_clean), mean(nasal_csw_clean), std(nasal_csw_clean), median(nasal_csw_clean));
+        
+        % Statistical tests (only if both groups have data)
+        if length(temporal_csw_clean) >= 3 && length(nasal_csw_clean) >= 3
+            
+            % 1. Normality tests (Shapiro-Wilk if available, otherwise Lilliefors)
+            try
+                % Test normality for each group
+                [h_norm_t, p_norm_t] = lillietest(temporal_csw_clean);
+                [h_norm_n, p_norm_n] = lillietest(nasal_csw_clean);
+                
+                fprintf('Normality tests (Lilliefors):\n');
+                fprintf('  Temporal: p=%.4f (%s)\n', p_norm_t, iif(h_norm_t, 'NOT normal', 'normal'));
+                fprintf('  Nasal: p=%.4f (%s)\n', p_norm_n, iif(h_norm_n, 'NOT normal', 'normal'));
+                
+                % 2. Equal variance test (F-test)
+                [h_var, p_var] = vartest2(temporal_csw_clean, nasal_csw_clean);
+                fprintf('Equal variance test (F-test): p=%.4f (%s)\n', p_var, iif(h_var, 'unequal variances', 'equal variances'));
+                
+                % 3. Choose appropriate test based on normality and variance
+                if ~h_norm_t && ~h_norm_n && ~h_var
+                    % Both normal and equal variances -> two-sample t-test
+                    [h_ttest, p_ttest] = ttest2(temporal_csw_clean, nasal_csw_clean);
+                    fprintf('Two-sample t-test: p=%.4f (%s)\n', p_ttest, iif(h_ttest, 'SIGNIFICANT', 'not significant'));
+                    stat_results.(sprintf('%s_test_used', lower(cell_type_name))) = 'two-sample t-test';
+                    stat_results.(sprintf('%s_p_value', lower(cell_type_name))) = p_ttest;
+                    
+                elseif ~h_norm_t && ~h_norm_n && h_var
+                    % Both normal but unequal variances -> Welch's t-test
+                    [h_welch, p_welch] = ttest2(temporal_csw_clean, nasal_csw_clean, 'Vartype', 'unequal');
+                    fprintf('Welch''s t-test (unequal variances): p=%.4f (%s)\n', p_welch, iif(h_welch, 'SIGNIFICANT', 'not significant'));
+                    stat_results.(sprintf('%s_test_used', lower(cell_type_name))) = 'Welch t-test';
+                    stat_results.(sprintf('%s_p_value', lower(cell_type_name))) = p_welch;
+                    
+                else
+                    % Non-normal data -> Mann-Whitney U test (Wilcoxon rank-sum)
+                    [p_ranksum, h_ranksum] = ranksum(temporal_csw_clean, nasal_csw_clean);
+                    fprintf('Mann-Whitney U test (Wilcoxon rank-sum): p=%.4f (%s)\n', p_ranksum, iif(h_ranksum, 'SIGNIFICANT', 'not significant'));
+                    stat_results.(sprintf('%s_test_used', lower(cell_type_name))) = 'Mann-Whitney U';
+                    stat_results.(sprintf('%s_p_value', lower(cell_type_name))) = p_ranksum;
+                end
+                
+                % 4. Effect size (Cohen's d)
+                pooled_std = sqrt(((length(temporal_csw_clean)-1)*var(temporal_csw_clean) + ...
+                                 (length(nasal_csw_clean)-1)*var(nasal_csw_clean)) / ...
+                                (length(temporal_csw_clean) + length(nasal_csw_clean) - 2));
+                cohens_d = (mean(temporal_csw_clean) - mean(nasal_csw_clean)) / pooled_std;
+                fprintf('Effect size (Cohen''s d): %.4f (%s)\n', cohens_d, ...
+                    iif(abs(cohens_d) < 0.2, 'negligible', ...
+                    iif(abs(cohens_d) < 0.5, 'small', ...
+                    iif(abs(cohens_d) < 0.8, 'medium', 'large'))));
+                
+                stat_results.(sprintf('%s_cohens_d', lower(cell_type_name))) = cohens_d;
+                
+            catch ME
+                fprintf('Error in statistical testing: %s\n', ME.message);
+            end
+            
+        else
+            fprintf('Insufficient data for statistical testing (need n>=3 for both groups)\n');
+        end
+    end
+    
+    % Save statistical results
+    save('subunit_weight_statistics.mat', 'stat_results');
+    fprintf('\nStatistical results saved to subunit_weight_statistics.mat\n');
+end
+
+% Helper function for conditional text
+function result = iif(condition, true_text, false_text)
+    if condition
+        result = true_text;
+    else
+        result = false_text;
+    end
 end
 
 %

@@ -56,11 +56,32 @@ end
 prm_c = prm_temp{bestblk};
 r_hat_c = r_hat_temp_c(bestblk, :);
 
+clear prm_temp
+lnk_corr_temp_w = nan(num_lnk_test, 1);
+tic
+for lnk = 1:num_lnk_test
+    fprintf('Fitting LNK model with CSR constraint %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+    [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
+        'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
+        'CSR', 0.09, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', 20);
+    if lnk == 1
+        r_hat_temp_w = nan(num_lnk_test, length(r_hat_w));
+    end
+    prm_temp{lnk} = prm_w;
+    r_hat_temp_w(lnk, :) = r_hat_w;
+    lnk_corr_temp_w(lnk) = corr(exp(:), r_hat_w(:));
+
+end
+[~, bestblk] = max(lnk_corr_temp_w);
+prm_w = prm_temp{bestblk};
+r_hat_w = r_hat_temp_w(bestblk, :);
+%%
+keyboard
 %%
 x_lim_range = [28 52];
 close all;
 figure;
-subplot(3, 1, 1)
+subplot(4, 1, 1)
 plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
@@ -69,24 +90,38 @@ plot(ct, sim);
 xlim(x_lim_range);
 xlabel('Time (s)');
 ylabel('linear RF signal (arbi.)');
+title('Data: Experimental firing rate vs Simulation');
 box off;
 
-subplot(3, 1, 2)
+subplot(4, 1, 2)
 plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
 plot(ct, r_hat);
 xlim(x_lim_range);
 xlabel('Time (s)');
-ylabel('linear RF signal (arbi.)');
+ylabel('Predicted rate (spike/s)');
+title('LNK fit (center only)');
 box off;
 
-subplot(3, 1, 3)
+subplot(4, 1, 3)
 plot(ct, exp);
 ylabel('Firing rate (spike/s)');
 yyaxis right
 plot(ct, r_hat_s);
 xlim(x_lim_range);
 xlabel('Time (s)');
-ylabel('linear RF signal (arbi.)');
+ylabel('Predicted rate (spike/s)');
+title('LNK fit (center + surround)');
+box off;
+
+subplot(4, 1, 4)
+plot(ct, exp);
+ylabel('Firing rate (spike/s)');
+yyaxis right
+plot(ct, r_hat_w);
+xlim(x_lim_range);
+xlabel('Time (s)');
+ylabel('Predicted rate (spike/s)');
+title('LNK fit (center + surround with CSR constraint)');
 box off;
