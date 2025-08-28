@@ -1,7 +1,7 @@
 close all; clear; clc;
 %%
 set_name = 'latest';  % before081425
-is_show_fitted = 0;
+is_show_fitted = 1;
 switch set_name
      case 'before081425'
         data_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101224', 'e101224',...
@@ -34,17 +34,17 @@ end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
-Cdat = nan(num_set, 2, 2);
-Cbas = nan(num_set, 2);
+Cdat = nan(num_set, 6);
+Cbas = nan(num_set, 1);
 Csw = nan(num_set, 1);
 implement_case_id = 6;
 for i = 1:num_set
     file_name = sprintf('%s_moving_bar_processed.mat', data_sets{i});
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
-        file_name = sprintf('%s_%d_moving_bar_fitted.mat', data_sets{i}, implement_case_id);
+        file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
         load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s');
-        Cdat(i, :, :) = PredictionResults;
+        Cdat(i, :) = PredictionResults;
         Cbas(i, :) = BaselineCorr;
         Csw(i, :) = LNK_params_s.w_xs;
     end
@@ -83,7 +83,8 @@ for i = 1:num_set
     end
 end
 fprintf('Check session completed.\n');
-
+%
+keyboard;
 %%
 cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
 location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
