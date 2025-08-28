@@ -24,7 +24,8 @@ end
 switch test_type
     case 'ON'
         groups = {'AcuteZoneDT_ONSus_RF_GRN','DN_ONSus_RF_GRN'};  % edit/extend as needed
-        stim_idx = 101:300;  % during-stimulus period
+        % stim_idx = 101:300;  % during-stimulus period
+        stim_idx = 101:350;  % during-stimulus period
     case 'OFF'  
         groups = {'AcuteZoneDT_OFFSus_RF_GRN','DN_OFFSus_RF_GRN'};  % edit/extend as needed
         stim_idx = 301:500;  % during-stimulus period
@@ -299,12 +300,10 @@ if ~isempty(all_SI_values)
         title(strrep(gname, '_', '\_'), 'FontSize', 12, 'FontWeight', 'bold');
         grid on;
         
-        % Set x-axis to log scale if sizes span large range
-        if max(sizes) / min(sizes) > 10
-            set(gca, 'XScale', 'log');
-            xticks(sizes);
-            xticklabels(arrayfun(@num2str, sizes, 'UniformOutput', false));
-        end
+        % Set x-axis to linear scale from 0 to 1200
+        xlim([0, 1200]);
+        set(gca, 'XScale', 'linear');
+        xticks(0:200:1200);  % Tick marks every 200 μm
         
         % Add vertical lines to highlight size categories
         y_limits = ylim;
