@@ -34,19 +34,19 @@ end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
-Cdat = nan(num_set, 6);
+Cdat = nan(num_set, 7);
 Cbas = nan(num_set, 1);
-Csw = nan(num_set, 1);
+Csw = nan(num_set, 2);
 implement_case_id = 6;
 for i = 1:num_set
     file_name = sprintf('%s_moving_bar_processed.mat', data_sets{i});
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
         file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
-        load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s');
+        load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w');
         Cdat(i, :) = PredictionResults;
         Cbas(i, :) = BaselineCorr;
-        Csw(i, :) = LNK_params_s.w_xs;
+        Csw(i, 1:2) = [LNK_params_s.w_xs LNK_params_w.w_xs];
     end
 end
 
@@ -155,8 +155,8 @@ if is_show_fitted
         temporal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 1);
         nasal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 0);
         
-        temporal_csw = Csw(temporal_mask);
-        nasal_csw = Csw(nasal_mask);
+        temporal_csw = Csw(temporal_mask, 2);
+        nasal_csw = Csw(nasal_mask, 2);
         
         % Remove outliers using interquartile range method
         if length(temporal_csw) > 0
@@ -239,8 +239,8 @@ if is_show_fitted
         temporal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 1);
         nasal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 0);
         
-        temporal_csw = Csw(temporal_mask);
-        nasal_csw = Csw(nasal_mask);
+        temporal_csw = Csw(temporal_mask, 2);
+        nasal_csw = Csw(nasal_mask, 2);
         
         % Remove outliers using same method as in plotting
         if length(temporal_csw) > 0

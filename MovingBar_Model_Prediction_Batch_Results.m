@@ -26,12 +26,13 @@ if exist(processedFile, 'file')
 else
     error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
 end
-ON_Nasal_CSR = 0.09;
-ON_Temporal_CSR = 0.12;
-OFF_Nasal_CSR = 0.08;
-OFF_Temporal_CSR = 0.11;
+%% run SpotSizeAnalysis_simple.m to get the following values
+ON_Nasal_CSR = 0.006;
+ON_Temporal_CSR = 0.09;
+OFF_Nasal_CSR = 0.056;
+OFF_Temporal_CSR = 0.062;
 %%
-for ii = 1:num_recording
+for ii = 24:num_recording
     recording_name = recording_sets{ii};
     PredictionResults = nan(1, 7);
     BaselineCorr = nan(1, 1);
@@ -156,7 +157,7 @@ for ii = 1:num_recording
         case 'f110424'
             stim_wn_id = '002';
             stim_mb_id = '003';
-            bar_type = 'OFF';
+            bar_type = 'ON';
         case 'g110424'
             stim_wn_id = '001';
             stim_mb_id = '002';

@@ -89,8 +89,7 @@ end
 [~, bestblk] = max(lnk_corr_temp_w);
 prm_w = prm_temp{bestblk};
 r_hat_w = r_hat_temp_w(bestblk, :);
-%%
-keyboard
+
 %%
 if is_plot
     x_lim_range = [28 52];
