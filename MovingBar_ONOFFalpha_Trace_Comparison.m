@@ -1,5 +1,5 @@
 close all; clear; clc;
-%%
+%% Load processed data
 set_name = 'latest';  % before081425
 is_show_fitted = 1;
 switch set_name
@@ -37,16 +37,31 @@ folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptur
 Cdat = nan(num_set, 8);
 Cbas = nan(num_set, 1);
 Csw = nan(num_set, 2);
+% Add LNK_params array to collect parameters
+LNK_params_array = nan(num_set, 10); % 10 columns for the specified parameters
 implement_case_id = 6;
 for i = 1:num_set
     file_name = sprintf('%s_moving_bar_processed.mat', data_sets{i});
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
         file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
-        load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w');
-        Cdat(i, :) = PredictionResults;
-        Cbas(i, :) = BaselineCorr;
-        Csw(i, 1:2) = [LNK_params_s.w_xs LNK_params_w.w_xs];
+        loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w');
+        Cdat(i, :) = loaded_data.PredictionResults;
+        Cbas(i, :) = loaded_data.BaselineCorr;
+        Csw(i, 1:2) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs];
+        
+        % Collect LNK_params_w parameters in specified order
+        % Order: 'tau', 'alpha_d', 'theta', 'sigma0', 'alpha', 'beta', 'b_out', 'g_out', 'w_xs', 'dt'
+        LNK_params_array(i, 1) = loaded_data.LNK_params_w.tau;
+        LNK_params_array(i, 2) = loaded_data.LNK_params_w.alpha_d;
+        LNK_params_array(i, 3) = loaded_data.LNK_params_w.theta;
+        LNK_params_array(i, 4) = loaded_data.LNK_params_w.sigma0;
+        LNK_params_array(i, 5) = loaded_data.LNK_params_w.alpha;
+        LNK_params_array(i, 6) = loaded_data.LNK_params_w.beta;
+        LNK_params_array(i, 7) = loaded_data.LNK_params_w.b_out;
+        LNK_params_array(i, 8) = loaded_data.LNK_params_w.g_out;
+        LNK_params_array(i, 9) = loaded_data.LNK_params_w.w_xs;
+        LNK_params_array(i, 10) = 0.01; % dt default value
     end
 end
 
@@ -56,7 +71,8 @@ folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptur
 processedFile = fullfile(folder_name, process_version);
 
 if exist(processedFile, 'file')
-    WN = load(processedFile, 'gauss_est', 'Gauss_TF_est', 'data_sets', 'cell_type', 'location');
+    WN = load(processedFile, 'gauss_est', 'Gauss_TF_est', 'data_sets', 'cell_type', 'location', ...
+    'gauss_est_ON_nasal', 'gauss_est_ON_temporal', 'Gauss_TF_est_OFF_nasal', 'Gauss_TF_est_OFF_temporal');
     fprintf('Loaded fitted parameters for LN model\n');
 else
     error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
@@ -88,9 +104,101 @@ for i = 1:num_set
 end
 fprintf('Check session completed.\n');
 
+%% Split LNK parameters into groups based on WN fields
+if is_show_fitted && exist('WN', 'var')
+    % Create mapping from data_sets to WN indices
+    LNK_params_groups = struct();
+    
+    % Initialize arrays for each group
+    LNK_params_ON_temporal = [];
+    LNK_params_ON_nasal = [];
+    LNK_params_OFF_temporal = [];
+    LNK_params_OFF_nasal = [];
+    
+    % Iterate through WN.data_sets to ensure consistent ordering and size
+    for wn_idx = 1:length(WN.data_sets)
+        wn_ds_name = WN.data_sets{wn_idx};
+        wn_cell_type = WN.cell_type{wn_idx};
+        wn_location = WN.location{wn_idx};
+        
+        % Find corresponding index in main data_sets
+        main_idx = find(strcmp(wn_ds_name, data_sets));
+        
+        if isempty(main_idx)
+            % Dataset exists in WN but not in main script - use NaN row
+            fprintf('INFO: %s found in WN but not in main data_sets, using NaN values\n', wn_ds_name);
+            param_row = nan(1, 10); % 10 parameters with NaN values
+        else
+            % Dataset exists in both - use actual parameters
+            param_row = LNK_params_array(main_idx, :);
+        end
+        
+        % Assign to appropriate group based on WN cell type and location
+        if strcmpi(wn_cell_type, 'ON') && strcmpi(wn_location, 'Temporal')
+            LNK_params_ON_temporal = [LNK_params_ON_temporal; param_row];
+        elseif strcmpi(wn_cell_type, 'ON') && strcmpi(wn_location, 'Nasal')
+            LNK_params_ON_nasal = [LNK_params_ON_nasal; param_row];
+        elseif strcmpi(wn_cell_type, 'OFF') && strcmpi(wn_location, 'Temporal')
+            LNK_params_OFF_temporal = [LNK_params_OFF_temporal; param_row];
+        elseif strcmpi(wn_cell_type, 'OFF') && strcmpi(wn_location, 'Nasal')
+            LNK_params_OFF_nasal = [LNK_params_OFF_nasal; param_row];
+        else
+            fprintf('WARNING: Unknown cell type/location combination: %s/%s for %s\n', wn_cell_type, wn_location, wn_ds_name);
+        end
+    end
+    
+    % Store in structure with parameter names
+    param_names = {'tau', 'alpha_d', 'theta', 'sigma0', 'alpha', 'beta', 'b_out', 'g_out', 'w_xs', 'dt'};
+    LNK_params_groups.param_names = param_names;
+    LNK_params_groups.ON_temporal = LNK_params_ON_temporal;
+    LNK_params_groups.ON_nasal = LNK_params_ON_nasal;
+    LNK_params_groups.OFF_temporal = LNK_params_OFF_temporal;
+    LNK_params_groups.OFF_nasal = LNK_params_OFF_nasal;
+    
+    % Sanity check with WN group sizes
+    fprintf('\n=== LNK PARAMETERS SPLIT SANITY CHECK ===\n');
+    
+    % Check if WN group variables exist and compare sizes
+    if isfield(WN, 'gauss_est_ON_nasal')
+        expected_ON_nasal = size(WN.gauss_est_ON_nasal, 1);
+        actual_ON_nasal = size(LNK_params_ON_nasal, 1);
+        fprintf('ON-nasal: Expected %d, Got %d %s\n', expected_ON_nasal, actual_ON_nasal, ...
+                iif(expected_ON_nasal == actual_ON_nasal, '✓', '✗'));
+    end
+    
+    if isfield(WN, 'gauss_est_ON_temporal')
+        expected_ON_temporal = size(WN.gauss_est_ON_temporal, 1);
+        actual_ON_temporal = size(LNK_params_ON_temporal, 1);
+        fprintf('ON-temporal: Expected %d, Got %d %s\n', expected_ON_temporal, actual_ON_temporal, ...
+                iif(expected_ON_temporal == actual_ON_temporal, '✓', '✗'));
+    end
+    
+    if isfield(WN, 'Gauss_TF_est_OFF_nasal')
+        expected_OFF_nasal = size(WN.Gauss_TF_est_OFF_nasal, 1);
+        actual_OFF_nasal = size(LNK_params_OFF_nasal, 1);
+        fprintf('OFF-nasal: Expected %d, Got %d %s\n', expected_OFF_nasal, actual_OFF_nasal, ...
+                iif(expected_OFF_nasal == actual_OFF_nasal, '✓', '✗'));
+    end
+    
+    if isfield(WN, 'Gauss_TF_est_OFF_temporal')
+        expected_OFF_temporal = size(WN.Gauss_TF_est_OFF_temporal, 1);
+        actual_OFF_temporal = size(LNK_params_OFF_temporal, 1);
+        fprintf('OFF-temporal: Expected %d, Got %d %s\n', expected_OFF_temporal, actual_OFF_temporal, ...
+                iif(expected_OFF_temporal == actual_OFF_temporal, '✓', '✗'));
+    end
+    
+    fprintf('\nLNK parameters successfully split into groups.\n');
+    fprintf('Use LNK_params_groups.ON_temporal, LNK_params_groups.ON_nasal, etc. to access the data.\n');
+    fprintf('Column order: %s\n', strjoin(param_names, ', '));
+    
+else
+    fprintf('LNK parameter splitting skipped: is_show_fitted=%d, WN exists=%d\n', is_show_fitted, exist('WN', 'var'));
+end
+
 cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
 location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
 
+keyboard;
 %% Plot Cdat (4th and 5th columns) and Cbas
 if is_show_fitted
     % Define groups
