@@ -11,7 +11,7 @@ recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101
 
 Fz = 100;
 num_recording = length(recording_sets);
-all_corr = nan(num_recording, 8);
+all_corr = nan(num_recording, 9);
 all_SC = nan(num_recording, 2);
 is_plot = 0;
 
@@ -37,7 +37,7 @@ count_csr_type = nan(num_recording, 1);
 %%
 for ii = 1:num_recording
     recording_name = recording_sets{ii};
-    PredictionResults = nan(1, 7);
+    PredictionResults = nan(1, 8);
     BaselineCorr = nan(1, 1);
     clear PredTraces
     

@@ -34,7 +34,7 @@ end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
-Cdat = nan(num_set, 7);
+Cdat = nan(num_set, 8);
 Cbas = nan(num_set, 1);
 Csw = nan(num_set, 2);
 implement_case_id = 6;

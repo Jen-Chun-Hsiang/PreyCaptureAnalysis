@@ -121,14 +121,13 @@ exp(isnan(exp)) = 0;
 
 test_LNK_fitting
 [sim_nl, LN_params] = fit_linear_transform(sim*1e6, exp);
-PredictionResults( 3:7) = [corr(exp(:), r_hat(:)) corr(exp(:), r_hat_s(:)),...
-                           corr(exp(:), sim_nl(:))   corr(exp(:), sim_s(:)),...
-                           corr(exp(:), r_hat_w(:))];
+PredictionResults( 3:end) = [corr(exp(:), r_hat(:))   corr(exp(:), r_hat_s(:)),...
+                           corr(exp(:), sim_nl(:))  corr(exp(:), sim_s(:)),...
+                           corr(exp(:), r_hat_w(:)) corr(exp(:), sim(:))];
 LNK_params = prm;
 LNK_params_s = prm_s;
 LNK_params_w = prm_w;
 
-keyboard;
 %%
 csim = sim;
 csim = csim*1e6;
