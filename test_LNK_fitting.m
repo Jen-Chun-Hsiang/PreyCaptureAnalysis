@@ -77,7 +77,7 @@ for lnk = 1:num_lnk_test
     
     [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
-        'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', 500);
+        'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', CSRStrength);
     if lnk == 1
         r_hat_temp_w = nan(num_lnk_test, length(r_hat_w));
     end

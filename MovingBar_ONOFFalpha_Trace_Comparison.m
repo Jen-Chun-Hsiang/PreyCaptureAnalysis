@@ -116,9 +116,9 @@ if is_show_fitted
         end
         
         group_cbas = Cbas(group_mask);
-        group_cdat_ln = Cdat(group_mask, 3);    % 3rd column: LN
-        group_cdat_lnk = Cdat(group_mask, 4);   % 4th column: LNK
-        
+        group_cdat_ln = Cdat(group_mask, 5);    % 5th column: LN
+        group_cdat_lnk = Cdat(group_mask, 7);   % 7th column: LNK
+
         % Sort by Cbas in descending order
         [sorted_cbas, sort_idx] = sort(group_cbas, 'descend');
         sorted_cdat_ln = group_cdat_ln(sort_idx);
