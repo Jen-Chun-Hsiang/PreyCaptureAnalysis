@@ -12,7 +12,7 @@ recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101
 Fz = 100;
 num_recording = length(recording_sets);
 all_corr = nan(num_recording, 8);
-all_SC = nan(num_recording, 1);
+all_SC = nan(num_recording, 2);
 is_plot = 0;
 
 %%
@@ -27,12 +27,14 @@ else
     error('Fitted parameters not found. Run WhiteNoise_ONOFFalpha_Comparison.m first.');
 end
 %% run SpotSizeAnalysis_simple.m to get the following values
-ON_Nasal_CSR = 0.006;
-ON_Temporal_CSR = 0.09;
-OFF_Nasal_CSR = 0.056;
-OFF_Temporal_CSR = 0.062;
+ON_Nasal_CSR = -0.006;
+ON_Temporal_CSR = -0.09;
+OFF_Nasal_CSR = -0.056;
+OFF_Temporal_CSR = -0.062;
 %%
-for ii = 24:num_recording
+count_csr_type = nan(num_recording, 1);
+%%
+for ii = 1:num_recording
     recording_name = recording_sets{ii};
     PredictionResults = nan(1, 7);
     BaselineCorr = nan(1, 1);
@@ -49,12 +51,16 @@ for ii = 24:num_recording
         % Determine CSR value based on cell type and location
         if strcmp(current_cell_type, 'ON') && strcmp(current_location, 'Nasal')
             current_CSR = ON_Nasal_CSR;
+            count_csr_type(ii) = 1;
         elseif strcmp(current_cell_type, 'ON') && strcmp(current_location, 'Temporal')
             current_CSR = ON_Temporal_CSR;
+            count_csr_type(ii) = 2;
         elseif strcmp(current_cell_type, 'OFF') && strcmp(current_location, 'Nasal')
             current_CSR = OFF_Nasal_CSR;
+            count_csr_type(ii) = 3;
         elseif strcmp(current_cell_type, 'OFF') && strcmp(current_location, 'Temporal')
             current_CSR = OFF_Temporal_CSR;
+            count_csr_type(ii) = 4;
         else
             warning('Unknown cell type (%s) or location (%s) for %s, using default CSR', ...
                     current_cell_type, current_location, recording_name);

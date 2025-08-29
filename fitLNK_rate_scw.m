@@ -220,29 +220,35 @@ function wxs_target = mapCSRtoWxs(CSR, metric, surroundSign)
 % Map center-surround ratio to target w_xs value
 %
 % INPUTS:
-%   CSR         : measured center-surround ratio
+%   CSR         : measured center-surround ratio (should be positive magnitude)
 %   metric      : 'S_over_C', 'C_over_S', or 'CSI'
 %   surroundSign: -1 (inhibitory) or +1 (excitatory)
 %
 % OUTPUT:
 %   wxs_target  : target value for w_xs parameter
 
+% Ensure CSR is treated as a magnitude (positive value)
+CSR = abs(CSR);
+
 switch lower(metric)
     case 's_over_c'
         % CSR = |Surround response| / |Center response|
-        k = max(CSR, 0);
+        k = CSR;
     case 'c_over_s'
         % CSR = |Center response| / |Surround response|
         % Convert to S_over_C format
         k = 1 / max(CSR, eps);
     case 'csi'
         % Center-Surround Index: CSI = (C - S) / (C + S)
-        % Assume C,S >= 0, solve for |S|/|C|
+        % For inhibitory surround, CSI > 0 means C > |S|
+        % For excitatory surround, CSI < 0 means S > C
+        % Solve for |S|/|C| from CSI
         r = max(min(CSR, 0.999), -0.999); % clamp to avoid division by zero
-        k = (1 - r) / (1 + r);
+        k = abs((1 - r) / (1 + r));
     otherwise
         error('Unknown CSRMetric. Use ''S_over_C'', ''C_over_S'', or ''CSI''.');
 end
 
+% Apply sign based on surround type
 wxs_target = surroundSign * k;
 end

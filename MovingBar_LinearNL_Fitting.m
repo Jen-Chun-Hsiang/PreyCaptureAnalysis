@@ -176,7 +176,7 @@ for i = 1:2
         'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
-all_SC(ii) = LNK_params_s.w_xs;
+all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs];
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])
