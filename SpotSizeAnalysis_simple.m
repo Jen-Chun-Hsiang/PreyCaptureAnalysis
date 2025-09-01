@@ -8,7 +8,7 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'ON';
+test_type = 'OFF';
 percent_peak = 0.85;
 
 % Save figure folder
@@ -405,7 +405,7 @@ end
 if ~isempty(all_SI_values)
     fprintf('\n========== CREATING C AND S TEMPORAL TRACES ==========\n');
     
-    figure('Color', 'w', 'Position', [400, 100, 1200, 800]);
+    figure('Color', 'w', 'Position', [400, 100, 1200, 600]);
     
     n_groups = numel(groups);
     
@@ -416,7 +416,7 @@ if ~isempty(all_SI_values)
         end
         
         % Create subplot for this group
-        subplot(2, n_groups, g);
+        subplot(1, n_groups, g);
         
         % Get original temporal data for this group
         M = a.(gname);            % T x (nSizes * nCells)
@@ -553,14 +553,30 @@ if ~isempty(all_SI_values)
             plot(time_axis, S_mean, 'r-', 'LineWidth', 2, 'DisplayName', 'S (Surround)');
         end
         
-        % Add stimulus period shading
+        % Add stimulus timing bar at the top of the plot
         y_lim = ylim;
-        if strcmp(test_type, 'ON')
-            fill([time_axis(110), time_axis(300), time_axis(300), time_axis(110)], ...
-                 [y_lim(1), y_lim(1), y_lim(2), y_lim(2)], [0.8 0.8 0.8], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-        elseif strcmp(test_type, 'OFF')
-            fill([time_axis(310), time_axis(500), time_axis(500), time_axis(310)], ...
-                 [y_lim(1), y_lim(1), y_lim(2), y_lim(2)], [0.8 0.8 0.8], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+        bar_height = 0.05 * (y_lim(2) - y_lim(1));  % 5% of y-range
+        bar_y_pos = y_lim(2) - bar_height;
+        
+        % Pre-stimulus period (black) - indices 1 to 100
+        fill([time_axis(1), time_axis(100), time_axis(100), time_axis(1)], ...
+             [bar_y_pos, bar_y_pos, y_lim(2), y_lim(2)], [0 0 0], 'EdgeColor', 'none');
+        
+        % Stimulus period (yellow) - indices 101 to 300
+        fill([time_axis(101), time_axis(300), time_axis(300), time_axis(101)], ...
+             [bar_y_pos, bar_y_pos, y_lim(2), y_lim(2)], [1 1 0], 'EdgeColor', 'none');
+        
+        % Post-stimulus period (black) - indices 301 to end
+        if length(time_axis) > 300
+            fill([time_axis(301), time_axis(end), time_axis(end), time_axis(301)], ...
+                 [bar_y_pos, bar_y_pos, y_lim(2), y_lim(2)], [0 0 0], 'EdgeColor', 'none');
+        end
+        
+        % Add text label for stimulus timing (only on first subplot)
+        if g == 1
+            text(mean([time_axis(101), time_axis(300)]), y_lim(2) - bar_height/2, 'Stimulus ON', ...
+                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+                 'FontSize', 8, 'FontWeight', 'bold', 'Color', 'k');
         end
         
         hold off;
@@ -579,46 +595,6 @@ if ~isempty(all_SI_values)
         title(sprintf('%s\nC vs S Temporal Traces (C: n=%d, S: n=%d)', ...
               strrep(gname, '_', '\_'), n_C_cells, n_S_cells), ...
               'FontSize', 11, 'FontWeight', 'bold');
-        
-        % Second subplot: Show stimulus period only (zoomed in)
-        subplot(2, n_groups, g + n_groups);
-        
-        % Define stimulus period indices
-        if strcmp(test_type, 'ON')
-            stim_period_idx = 110:300;
-        elseif strcmp(test_type, 'OFF')
-            stim_period_idx = 310:500;
-        end
-        
-        hold on;
-        time_axis_stim = time_axis(stim_period_idx);
-        
-        % Plot C trace during stimulus period
-        if ~isempty(C_traces)
-            C_mean_stim = C_mean(stim_period_idx);
-            C_sem_stim = C_sem(stim_period_idx);
-            fill([time_axis_stim; flipud(time_axis_stim)], [C_mean_stim + C_sem_stim; flipud(C_mean_stim - C_sem_stim)], ...
-                 [0.3 0.3 1], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-            plot(time_axis_stim, C_mean_stim, 'b-', 'LineWidth', 2, 'DisplayName', 'C (Center)');
-        end
-        
-        % Plot S trace during stimulus period
-        if ~isempty(S_traces)
-            S_mean_stim = S_mean(stim_period_idx);
-            S_sem_stim = S_sem(stim_period_idx);
-            fill([time_axis_stim; flipud(time_axis_stim)], [S_mean_stim + S_sem_stim; flipud(S_mean_stim - S_sem_stim)], ...
-                 [1 0.3 0.3], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-            plot(time_axis_stim, S_mean_stim, 'r-', 'LineWidth', 2, 'DisplayName', 'S (Surround)');
-        end
-        
-        hold off;
-        
-        % Customize stimulus period subplot
-        xlabel('Time (s)');
-        ylabel('Response (spikes/s)');
-        title(sprintf('Stimulus Period (%s)', test_type), 'FontSize', 11);
-        grid on;
-        legend('Location', 'best');
         
         fprintf('  Group %s: C traces from %d cells, S traces from %d cells\n', gname, n_C_cells, n_S_cells);
     end
