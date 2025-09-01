@@ -8,7 +8,7 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'OFF';
+test_type = 'ON';
 percent_peak = 0.85;
 
 % Save figure folder
@@ -260,7 +260,7 @@ if ~isempty(all_SI_values)
     grid on;
     
     % Add horizontal line at SI = 0
-    yline(0, 'k--', 'LineWidth', 1, 'Alpha', 0.5);
+    yline(0, 'k--', 'LineWidth', 1);
     
     % Add text annotation explaining SI calculation
     annotation_text = sprintf(['SI = (S - C) / C\n' ...
@@ -357,12 +357,12 @@ if ~isempty(all_SI_values)
         % Mark large sizes used for S calculation
         for ls = large_sizes
             if any(sizes == ls)
-                xline(ls, 'r--', 'LineWidth', 2, 'Alpha', 0.7);
+                xline(ls, 'r--', 'LineWidth', 2);
             end
         end
         
         % Mark small size threshold
-        xline(small_size_threshold, 'b--', 'LineWidth', 2, 'Alpha', 0.7);
+        xline(small_size_threshold, 'b--', 'LineWidth', 2);
         
         % Add legend for the first subplot
         if g == 1
@@ -449,6 +449,10 @@ optimal_results = struct();
 all_optimal_sizes = [];
 all_optimal_group_labels = [];
 
+% Parameters for interpolation
+interp_resolution = 10; % μm spacing for interpolation
+interp_sizes = min(sorted_sizes):interp_resolution:max(sorted_sizes);
+
 for g = 1:numel(groups)
     gname = groups{g};
     if ~isfield(results, gname)
@@ -463,34 +467,50 @@ for g = 1:numel(groups)
     n_cells = size(responses_matrix, 2);
     
     optimal_sizes = nan(n_cells, 1);
+    interpolated_curves = cell(n_cells, 1); % Store interpolated curves for plotting
     
     for c = 1:n_cells
         cell_responses = responses_matrix(:, c);
         
         % Skip if cell has too many NaN values
-        valid_responses = ~isnan(cell_responses);
-        if sum(valid_responses) < 3
+        valid_idx = ~isnan(cell_responses);
+        if sum(valid_idx) < 3
             continue;
         end
         
-        % Find peak response
-        peak_response = max(cell_responses, [], 'omitnan');
+        valid_sizes = sizes(valid_idx);
+        valid_responses = cell_responses(valid_idx);
         
-        % Calculate specified percentage of peak
-        target_response = percent_peak * peak_response;
-        
-        % Find the spot size that first reaches the target percentage of peak (ascending order)
-        target_reached = cell_responses >= target_response;
-        first_target_idx = find(target_reached, 1, 'first');
-        
-        if ~isempty(first_target_idx)
-            optimal_sizes(c) = sizes(first_target_idx);
+        % Use pchip interpolation (shape-preserving, no overshoot)
+        try
+            % Create interpolation function
+            pp = pchip(valid_sizes, valid_responses);
+            interp_responses = ppval(pp, interp_sizes);
             
-            % Debug output for first few cells
-            if c <= 3
-                fprintf('  Cell %d: Peak=%.2f, %.0f%% target=%.2f, Optimal size=%d\n', ...
-                    c, peak_response, percent_peak*100, target_response, optimal_sizes(c));
+            % Store interpolated curve
+            interpolated_curves{c} = struct('sizes', interp_sizes, 'responses', interp_responses);
+            
+            % Find peak response from interpolated data
+            peak_response = max(interp_responses);
+            
+            % Calculate specified percentage of peak
+            target_response = percent_peak * peak_response;
+            
+            % Find the spot size that first reaches the target percentage of peak
+            target_reached = interp_responses >= target_response;
+            first_target_idx = find(target_reached, 1, 'first');
+            
+            if ~isempty(first_target_idx)
+                optimal_sizes(c) = interp_sizes(first_target_idx);
+                
+                % Debug output for first few cells
+                if c <= 3
+                    fprintf('  Cell %d: Peak=%.2f, %.0f%% target=%.2f, Optimal size=%.1f μm\n', ...
+                        c, peak_response, percent_peak*100, target_response, optimal_sizes(c));
+                end
             end
+        catch ME
+            fprintf('  Cell %d: Interpolation failed - %s\n', c, ME.message);
         end
     end
     
@@ -500,7 +520,7 @@ for g = 1:numel(groups)
     
     fprintf('  Valid optimal size calculations: %d/%d cells\n', sum(valid_optimal), n_cells);
     if ~isempty(valid_optimal_sizes)
-        fprintf('  Optimal size range: %d to %d μm\n', min(valid_optimal_sizes), max(valid_optimal_sizes));
+        fprintf('  Optimal size range: %.1f to %.1f μm\n', min(valid_optimal_sizes), max(valid_optimal_sizes));
         fprintf('  Mean optimal size: %.1f ± %.1f μm (SEM)\n', mean(valid_optimal_sizes), std(valid_optimal_sizes)/sqrt(length(valid_optimal_sizes)));
         
         % Store results
@@ -510,6 +530,7 @@ for g = 1:numel(groups)
         optimal_results.(gname).sem_optimal = std(valid_optimal_sizes) / sqrt(length(valid_optimal_sizes));
         optimal_results.(gname).std_optimal = std(valid_optimal_sizes);
         optimal_results.(gname).n_cells = length(valid_optimal_sizes);
+        optimal_results.(gname).interpolated_curves = interpolated_curves;
         
         % Collect data for combined plot
         all_optimal_sizes = [all_optimal_sizes; valid_optimal_sizes];
@@ -517,6 +538,172 @@ for g = 1:numel(groups)
     else
         fprintf('  No valid optimal sizes calculated\n');
     end
+end
+
+% ---------------- Interpolation Visualization ----------------
+% Create figure showing interpolated curves for each group
+if ~isempty(all_optimal_sizes)
+    figure('Color', 'w', 'Position', [100, 50, 1400, 800]);
+    
+    n_groups = numel(groups);
+    
+    for g = 1:n_groups
+        gname = groups{g};
+        if ~isfield(optimal_results, gname)
+            continue;
+        end
+        
+        % Create subplot for this group
+        subplot(2, n_groups, g);
+        
+        % Get data for this group
+        sizes = results.(gname).sizes;
+        responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
+        interpolated_curves = optimal_results.(gname).interpolated_curves;
+        optimal_sizes_for_group = optimal_results.(gname).optimal_sizes;
+        n_cells = size(responses_matrix, 2);
+        
+        % Plot each cell's interpolated curve
+        hold on;
+        colors = lines(n_cells);
+        
+        for c = 1:n_cells
+            cell_responses = responses_matrix(:, c);
+            
+            % Plot original data points
+            valid_idx = ~isnan(cell_responses);
+            if any(valid_idx)
+                plot(sizes(valid_idx), cell_responses(valid_idx), 'o', ...
+                     'Color', colors(c,:), 'MarkerSize', 6, ...
+                     'MarkerFaceColor', colors(c,:), 'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
+            end
+            
+            % Plot interpolated curve if available
+            if ~isempty(interpolated_curves{c})
+                plot(interpolated_curves{c}.sizes, interpolated_curves{c}.responses, '-', ...
+                     'Color', colors(c,:), 'LineWidth', 1.5);
+                
+                % Mark optimal spot size if valid
+                if ~isnan(optimal_sizes_for_group(c))
+                    % Find corresponding response at optimal size
+                    [~, opt_idx] = min(abs(interpolated_curves{c}.sizes - optimal_sizes_for_group(c)));
+                    opt_response = interpolated_curves{c}.responses(opt_idx);
+                    
+                    plot(optimal_sizes_for_group(c), opt_response, 's', ...
+                         'Color', colors(c,:), 'MarkerSize', 10, ...
+                         'MarkerFaceColor', 'none', 'MarkerEdgeColor', colors(c,:), 'LineWidth', 2);
+                end
+            end
+        end
+        
+        hold off;
+        
+        % Customize subplot
+        xlabel('Spot Size (μm)');
+        ylabel('Mean Response (spikes/s)');
+        title(sprintf('%s\nInterpolated Curves (pchip)', strrep(gname, '_', '\_')), ...
+              'FontSize', 11, 'FontWeight', 'bold');
+        grid on;
+        xlim([0, 1200]);
+        set(gca, 'XScale', 'linear');
+        xticks(0:200:1200);
+        
+        % Add legend for the first subplot
+        if g == 1
+            legend_str = sprintf('Circles: Original data\nLines: Interpolated\nSquares: %.0f%% optimal', percent_peak*100);
+            text(0.02, 0.98, legend_str, 'Units', 'normalized', ...
+                 'VerticalAlignment', 'top', 'BackgroundColor', [1 1 1 0.8], ...
+                 'EdgeColor', 'k', 'FontSize', 8);
+        end
+        
+        % Lower subplot: Show zoom-in around optimal sizes
+        subplot(2, n_groups, g + n_groups);
+        
+        hold on;
+        
+        % Determine zoom range based on optimal sizes
+        valid_optimal = optimal_sizes_for_group(~isnan(optimal_sizes_for_group));
+        if ~isempty(valid_optimal)
+            zoom_center = mean(valid_optimal);
+            zoom_range = max(200, 2 * std(valid_optimal));
+            zoom_min = max(0, zoom_center - zoom_range);
+            zoom_max = min(1200, zoom_center + zoom_range);
+        else
+            zoom_min = 0;
+            zoom_max = 600;
+        end
+        
+        for c = 1:n_cells
+            cell_responses = responses_matrix(:, c);
+            
+            % Plot original data points in zoom range
+            valid_idx = ~isnan(cell_responses) & sizes >= zoom_min & sizes <= zoom_max;
+            if any(valid_idx)
+                plot(sizes(valid_idx), cell_responses(valid_idx), 'o', ...
+                     'Color', colors(c,:), 'MarkerSize', 8, ...
+                     'MarkerFaceColor', colors(c,:), 'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
+            end
+            
+            % Plot interpolated curve in zoom range
+            if ~isempty(interpolated_curves{c})
+                zoom_idx = interpolated_curves{c}.sizes >= zoom_min & ...
+                          interpolated_curves{c}.sizes <= zoom_max;
+                plot(interpolated_curves{c}.sizes(zoom_idx), ...
+                     interpolated_curves{c}.responses(zoom_idx), '-', ...
+                     'Color', colors(c,:), 'LineWidth', 2);
+                
+                % Mark optimal spot size
+                if ~isnan(optimal_sizes_for_group(c))
+                    % Find peak response for this cell
+                    peak_response = max(interpolated_curves{c}.responses);
+                    target_response = percent_peak * peak_response;
+                    
+                    % Plot horizontal line at target response
+                    plot([zoom_min, zoom_max], [target_response, target_response], '--', ...
+                         'Color', colors(c,:), 'LineWidth', 1);
+                    
+                    % Mark optimal point
+                    [~, opt_idx] = min(abs(interpolated_curves{c}.sizes - optimal_sizes_for_group(c)));
+                    opt_response = interpolated_curves{c}.responses(opt_idx);
+                    
+                    plot(optimal_sizes_for_group(c), opt_response, 's', ...
+                         'Color', colors(c,:), 'MarkerSize', 12, ...
+                         'MarkerFaceColor', colors(c,:), 'MarkerEdgeColor', 'k', 'LineWidth', 2);
+                    
+                    % Add vertical line at optimal size
+                    plot([optimal_sizes_for_group(c), optimal_sizes_for_group(c)], ...
+                         [0, opt_response], ':', 'Color', colors(c,:), 'LineWidth', 1.5);
+                end
+            end
+        end
+        
+        % Add mean optimal size line
+        if ~isempty(valid_optimal)
+            xline(mean(valid_optimal), 'k-', 'LineWidth', 2, ...
+                  'Label', sprintf('Mean: %.1f μm', mean(valid_optimal)));
+        end
+        
+        hold off;
+        
+        % Customize zoom subplot
+        xlabel('Spot Size (μm)');
+        ylabel('Mean Response (spikes/s)');
+        title(sprintf('Zoomed View (n=%d cells)', sum(~isnan(optimal_sizes_for_group))), ...
+              'FontSize', 11);
+        grid on;
+        xlim([zoom_min, zoom_max]);
+        set(gca, 'XScale', 'linear');
+    end
+    
+    % Add overall title
+    sgtitle(sprintf('Interpolated Response Curves and Optimal Spot Sizes (%.0f%% of Peak) - %s', ...
+            percent_peak*100, test_type), 'FontSize', 14, 'FontWeight', 'bold');
+    
+    % Save figure
+    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_%s.png', test_type)));
+    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_%s.fig', test_type)));
+    
+    fprintf('\nInterpolated curves figure saved as: OptimalSpotSize_Interpolated_%s.png\n', test_type);
 end
 
 % ---------------- Optimal Spot Size Plotting ----------------
@@ -545,7 +732,7 @@ if ~isempty(all_optimal_sizes)
     
     % Add error bars
     errorbar(group_positions, mean_optimal_values, sem_optimal_values, 'k', 'LineStyle', 'none', ...
-        'LineWidth', 1.5, 'CapSize', 8);
+        'LineWidth', 1.5, 'CapSize', 0);
     
     % Add individual data points
     jitter_width = 0.15;
@@ -571,11 +758,14 @@ if ~isempty(all_optimal_sizes)
     xticklabels(strrep(groups, '_', '\_'));
     xlabel('Cell Groups');
     ylabel('Optimal Spot Size (μm)');
-    title(sprintf('Optimal Spot Size (%.0f%% of Peak Response)', percent_peak*100));
-    grid on;
-    
+    title(sprintf('Optimal Spot Size (%.0f%% of Peak Response) - Interpolated', percent_peak*100));
+    grid off;
+
     % Add text annotation explaining calculation
-    annotation_text = sprintf('Optimal size = smallest spot size\nthat reaches %.0f%% of peak firing rate', percent_peak*100);
+    annotation_text = sprintf(['Optimal size = smallest spot size\n' ...
+                              'that reaches %.0f%% of peak firing rate\n' ...
+                              'Using pchip interpolation (%.0f μm resolution)'], ...
+                              percent_peak*100, interp_resolution);
     text(0.02, 0.98, annotation_text, 'Units', 'normalized', ...
         'VerticalAlignment', 'top', 'HorizontalAlignment', 'left', ...
         'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 9);
@@ -593,10 +783,10 @@ if ~isempty(all_optimal_sizes)
     hold off;
     
     % Save figure
-    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_%s.png', test_type)));
-    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_%s.fig', test_type)));
+    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.png', test_type)));
+    % saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.fig', test_type)));
     
-    fprintf('\nOptimal spot size figure saved as: OptimalSpotSize_%s.png\n', test_type);
+    fprintf('\nOptimal spot size bar chart saved as: OptimalSpotSize_Interpolated_BarChart_%s.png\n', test_type);
 end
 
 % ---------------- Optimal Spot Size Statistics ----------------
