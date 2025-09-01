@@ -400,6 +400,240 @@ if ~isempty(all_SI_values)
     fprintf('Individual traces figure saved as: SpotSizeAnalysis_IndividualTraces_%s.png\n', test_type);
 end
 
+% ---------------- C and S Temporal Traces Plot ----------------
+% Create figure showing temporal traces for C and S spot sizes
+if ~isempty(all_SI_values)
+    fprintf('\n========== CREATING C AND S TEMPORAL TRACES ==========\n');
+    
+    figure('Color', 'w', 'Position', [400, 100, 1200, 800]);
+    
+    n_groups = numel(groups);
+    
+    for g = 1:n_groups
+        gname = groups{g};
+        if ~isfield(results, gname)
+            continue;
+        end
+        
+        % Create subplot for this group
+        subplot(2, n_groups, g);
+        
+        % Get original temporal data for this group
+        M = a.(gname);            % T x (nSizes * nCells)
+        [Tg, nCol] = size(M);
+        nCells = nCol / nSizes;
+        
+        % Reshape temporal data: T x nSizes x nCells
+        M_reshaped = reshape(M, [Tg, nSizes, nCells]);
+        
+        % Reorder sizes to be ascending (and reorder M_reshaped accordingly)
+        M_reshaped = M_reshaped(:, sort_idx, :);
+        
+        % Initialize arrays to store C and S spot indices for each cell
+        C_spot_indices = cell(nCells, 1);
+        S_spot_indices = cell(nCells, 1);
+        
+        % Re-calculate C and S indices for each cell (following exact same logic as SI calculation)
+        for c = 1:nCells
+            cell_responses = squeeze(mean(M_reshaped(stim_idx, :, c), 1, 'omitnan'));  % Mean during stim for this cell
+            
+            % Find indices for large sizes (S) - same as in SI calculation
+            large_size_indices = ismember(sorted_sizes, large_sizes);
+            if sum(large_size_indices) > 0
+                S_spot_indices{c} = find(large_size_indices);
+            end
+            
+            % Find indices for small sizes (C) - same as in SI calculation  
+            small_size_indices = sorted_sizes < small_size_threshold;
+            if sum(small_size_indices) >= 2
+                C_responses = cell_responses(small_size_indices);
+                small_sizes_for_this_cell = sorted_sizes(small_size_indices);
+                
+                % Remove NaN values for peak finding
+                valid_indices = ~isnan(C_responses);
+                if sum(valid_indices) >= 2
+                    valid_C_responses = C_responses(valid_indices);
+                    valid_small_sizes = small_sizes_for_this_cell(valid_indices);
+                    
+                    % Find peak response
+                    [~, peak_idx] = max(valid_C_responses);
+                    peak_size = valid_small_sizes(peak_idx);
+                    
+                    % Find peak size index in the original sorted_sizes array
+                    peak_size_original_idx = find(sorted_sizes == peak_size);
+                    
+                    % Find adjacent spot sizes to the peak (same logic as SI calculation)
+                    adjacent_responses = [];
+                    adjacent_indices = [];
+                    
+                    % Check size immediately before peak
+                    if peak_size_original_idx > 1
+                        prev_size = sorted_sizes(peak_size_original_idx - 1);
+                        if prev_size < small_size_threshold && ~isnan(cell_responses(peak_size_original_idx - 1))
+                            adjacent_responses(end+1) = cell_responses(peak_size_original_idx - 1);
+                            adjacent_indices(end+1) = peak_size_original_idx - 1;
+                        end
+                    end
+                    
+                    % Check size immediately after peak
+                    if peak_size_original_idx < length(sorted_sizes)
+                        next_size = sorted_sizes(peak_size_original_idx + 1);
+                        if next_size < small_size_threshold && ~isnan(cell_responses(peak_size_original_idx + 1))
+                            adjacent_responses(end+1) = cell_responses(peak_size_original_idx + 1);
+                            adjacent_indices(end+1) = peak_size_original_idx + 1;
+                        end
+                    end
+                    
+                    % Store C indices: peak + largest adjacent (same as SI calculation)
+                    if length(adjacent_responses) >= 1
+                        [~, largest_idx] = max(adjacent_responses);
+                        C_spot_indices{c} = [peak_size_original_idx, adjacent_indices(largest_idx)];
+                        
+                        % Debug for first few cells
+                        if c <= 3
+                            fprintf('  Group %s, Cell %d: C spots = %s (sizes: %s), S spots = %s (sizes: %s)\n', ...
+                                gname, c, mat2str(C_spot_indices{c}), mat2str(sorted_sizes(C_spot_indices{c})), ...
+                                mat2str(S_spot_indices{c}), mat2str(sorted_sizes(S_spot_indices{c})));
+                        end
+                    end
+                end
+            end
+        end
+        
+        % Calculate mean temporal traces for C and S across all cells
+        C_traces = [];
+        S_traces = [];
+        
+        for c = 1:nCells
+            % Get C trace for this cell (mean across C spot sizes)
+            if ~isempty(C_spot_indices{c})
+                C_trace_cell = squeeze(mean(M_reshaped(:, C_spot_indices{c}, c), 2, 'omitnan'));
+                C_traces = [C_traces, C_trace_cell];
+            end
+            
+            % Get S trace for this cell (mean across S spot sizes)
+            if ~isempty(S_spot_indices{c})
+                S_trace_cell = squeeze(mean(M_reshaped(:, S_spot_indices{c}, c), 2, 'omitnan'));
+                S_traces = [S_traces, S_trace_cell];
+            end
+        end
+        
+        % Calculate group means and SEMs
+        if ~isempty(C_traces)
+            C_mean = mean(C_traces, 2, 'omitnan');
+            C_sem = std(C_traces, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(C_traces), 2));
+        else
+            C_mean = nan(Tg, 1);
+            C_sem = nan(Tg, 1);
+        end
+        
+        if ~isempty(S_traces)
+            S_mean = mean(S_traces, 2, 'omitnan');
+            S_sem = std(S_traces, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(S_traces), 2));
+        else
+            S_mean = nan(Tg, 1);
+            S_sem = nan(Tg, 1);
+        end
+        
+        % Plot temporal traces
+        hold on;
+        time_axis = a.x1;
+        
+        % Plot C trace (center) in blue
+        if ~isempty(C_traces)
+            fill([time_axis; flipud(time_axis)], [C_mean + C_sem; flipud(C_mean - C_sem)], ...
+                 [0.3 0.3 1], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis, C_mean, 'b-', 'LineWidth', 2, 'DisplayName', 'C (Center)');
+        end
+        
+        % Plot S trace (surround) in red
+        if ~isempty(S_traces)
+            fill([time_axis; flipud(time_axis)], [S_mean + S_sem; flipud(S_mean - S_sem)], ...
+                 [1 0.3 0.3], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis, S_mean, 'r-', 'LineWidth', 2, 'DisplayName', 'S (Surround)');
+        end
+        
+        % Add stimulus period shading
+        y_lim = ylim;
+        if strcmp(test_type, 'ON')
+            fill([time_axis(110), time_axis(300), time_axis(300), time_axis(110)], ...
+                 [y_lim(1), y_lim(1), y_lim(2), y_lim(2)], [0.8 0.8 0.8], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+        elseif strcmp(test_type, 'OFF')
+            fill([time_axis(310), time_axis(500), time_axis(500), time_axis(310)], ...
+                 [y_lim(1), y_lim(1), y_lim(2), y_lim(2)], [0.8 0.8 0.8], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+        end
+        
+        hold off;
+        
+        % Customize subplot
+        xlabel('Time (s)');
+        ylabel('Response (spikes/s)');
+        title(sprintf('%s\nC vs S Temporal Traces', strrep(gname, '_', '\_')), ...
+              'FontSize', 11, 'FontWeight', 'bold');
+        grid on;
+        legend('Location', 'best');
+        
+        % Add sample sizes to title
+        n_C_cells = sum(~cellfun(@isempty, C_spot_indices));
+        n_S_cells = sum(~cellfun(@isempty, S_spot_indices));
+        title(sprintf('%s\nC vs S Temporal Traces (C: n=%d, S: n=%d)', ...
+              strrep(gname, '_', '\_'), n_C_cells, n_S_cells), ...
+              'FontSize', 11, 'FontWeight', 'bold');
+        
+        % Second subplot: Show stimulus period only (zoomed in)
+        subplot(2, n_groups, g + n_groups);
+        
+        % Define stimulus period indices
+        if strcmp(test_type, 'ON')
+            stim_period_idx = 110:300;
+        elseif strcmp(test_type, 'OFF')
+            stim_period_idx = 310:500;
+        end
+        
+        hold on;
+        time_axis_stim = time_axis(stim_period_idx);
+        
+        % Plot C trace during stimulus period
+        if ~isempty(C_traces)
+            C_mean_stim = C_mean(stim_period_idx);
+            C_sem_stim = C_sem(stim_period_idx);
+            fill([time_axis_stim; flipud(time_axis_stim)], [C_mean_stim + C_sem_stim; flipud(C_mean_stim - C_sem_stim)], ...
+                 [0.3 0.3 1], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis_stim, C_mean_stim, 'b-', 'LineWidth', 2, 'DisplayName', 'C (Center)');
+        end
+        
+        % Plot S trace during stimulus period
+        if ~isempty(S_traces)
+            S_mean_stim = S_mean(stim_period_idx);
+            S_sem_stim = S_sem(stim_period_idx);
+            fill([time_axis_stim; flipud(time_axis_stim)], [S_mean_stim + S_sem_stim; flipud(S_mean_stim - S_sem_stim)], ...
+                 [1 0.3 0.3], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis_stim, S_mean_stim, 'r-', 'LineWidth', 2, 'DisplayName', 'S (Surround)');
+        end
+        
+        hold off;
+        
+        % Customize stimulus period subplot
+        xlabel('Time (s)');
+        ylabel('Response (spikes/s)');
+        title(sprintf('Stimulus Period (%s)', test_type), 'FontSize', 11);
+        grid on;
+        legend('Location', 'best');
+        
+        fprintf('  Group %s: C traces from %d cells, S traces from %d cells\n', gname, n_C_cells, n_S_cells);
+    end
+    
+    % Add overall title
+    sgtitle(sprintf('Temporal Traces for C (Center) and S (Surround) Spot Sizes (%s)', test_type), ...
+            'FontSize', 14, 'FontWeight', 'bold');
+    
+    % Save figure
+    saveas(gcf, fullfile(save_fig_folder, sprintf('C_S_TemporalTraces_%s.png', test_type)));
+    print(gcf, fullfile(save_fig_folder, sprintf('C_S_TemporalTraces_%s.eps', test_type)), '-depsc', '-r300');
+    
+    fprintf('\nC and S temporal traces figure saved as: C_S_TemporalTraces_%s.png and .eps\n', test_type);
+end
+
 % ---------------- Summary Statistics ----------------
 fprintf('\n========== SIZE INDEX SUMMARY ==========\n');
 for g = 1:numel(groups)
