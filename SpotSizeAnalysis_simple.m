@@ -53,6 +53,7 @@ results = struct();
 all_SI_values = [];
 all_group_labels = [];
 group_colors = lines(numel(groups));
+grey_color = 0.3*ones(1, 3);
 
 for g = 1:numel(groups)
     gname = groups{g};
@@ -205,6 +206,7 @@ for g = 1:numel(groups)
 end
 
 % ---------------- Plotting ----------------
+% Plot id: 12943
 if ~isempty(all_SI_values)
     figure('Color', 'w', 'Position', [100, 100, 800, 600]);
     
@@ -226,11 +228,11 @@ if ~isempty(all_SI_values)
     
     % Create bar plot with error bars
     hold on;
-    bars = bar(group_positions, mean_values, bar_width, 'FaceAlpha', 0.7);
+    bars = bar(group_positions, mean_values, bar_width, 'FaceAlpha', 0.7, 'EdgeColor', 'none');
     
     % Add error bars
     errorbar(group_positions, mean_values, sem_values, 'k', 'LineStyle', 'none', ...
-        'LineWidth', 1.5, 'CapSize', 8);
+        'LineWidth', 1.5, 'CapSize', 0);
     
     % Add individual data points
     jitter_width = 0.15;
@@ -245,8 +247,8 @@ if ~isempty(all_SI_values)
             x_positions = repmat(group_positions(g), n_points, 1) + x_jitter;
             
             % Plot individual points
-            scatter(x_positions, valid_SI_values, 40, group_colors(g,:), 'filled', ...
-                'MarkerEdgeColor', 'k', 'LineWidth', 0.5, 'MarkerFaceAlpha', 0.8);
+            scatter(x_positions, valid_SI_values, 40, grey_color, 'filled', ...
+                'MarkerEdgeColor', 'none');
         end
     end
     
@@ -254,10 +256,13 @@ if ~isempty(all_SI_values)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
+    ylim([-0.25 0.1])
+    yticks(-0.2:0.1:0.1)
+    yticklabels({'-0.2', '-0.1', '0', '0.1'})
     xlabel('Cell Groups');
     ylabel('Size Index (SI)');
     title('Size Index: (Large Spot Response - Center Response) / Center Response');
-    grid on;
+    grid off;
     
     % Add horizontal line at SI = 0
     yline(0, 'k--', 'LineWidth', 1);
@@ -287,9 +292,9 @@ if ~isempty(all_SI_values)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, 'SpotSizeAnalysis_SI_BarChart.png'));
-    saveas(gcf, fullfile(save_fig_folder, 'SpotSizeAnalysis_SI_BarChart.fig'));
+    print(gcf, fullfile(save_fig_folder, 'SpotSizeAnalysis_SI_BarChart.eps'), '-depsc', '-r300');
     
-    fprintf('\nFigure saved as: SpotSizeAnalysis_SI_BarChart.png\n');
+    fprintf('\nFigure saved as: SpotSizeAnalysis_SI_BarChart.png and .eps (vector)\n');
 else
     warning('No valid SI values calculated for any group.');
 end
@@ -391,7 +396,6 @@ if ~isempty(all_SI_values)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_IndividualTraces_%s.png', test_type)));
-    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_IndividualTraces_%s.fig', test_type)));
     
     fprintf('Individual traces figure saved as: SpotSizeAnalysis_IndividualTraces_%s.png\n', test_type);
 end
@@ -701,12 +705,12 @@ if ~isempty(all_optimal_sizes)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_%s.png', test_type)));
-    saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_%s.fig', test_type)));
     
     fprintf('\nInterpolated curves figure saved as: OptimalSpotSize_Interpolated_%s.png\n', test_type);
 end
 
 % ---------------- Optimal Spot Size Plotting ----------------
+% plot_id: 48521
 if ~isempty(all_optimal_sizes)
     figure('Color', 'w', 'Position', [300, 100, 800, 600]);
     
@@ -728,7 +732,7 @@ if ~isempty(all_optimal_sizes)
     
     % Create bar plot with error bars
     hold on;
-    bars = bar(group_positions, mean_optimal_values, bar_width, 'FaceAlpha', 0.7, 'FaceColor', [0.5 0.8 0.5]);
+    bars = bar(group_positions, mean_optimal_values, bar_width, 'FaceAlpha', 0.7, 'FaceColor', [0.5 0.8 0.5], 'EdgeColor', 'none');
     
     % Add error bars
     errorbar(group_positions, mean_optimal_values, sem_optimal_values, 'k', 'LineStyle', 'none', ...
@@ -747,8 +751,8 @@ if ~isempty(all_optimal_sizes)
             x_positions = repmat(group_positions(g), n_points, 1) + x_jitter;
             
             % Plot individual points
-            scatter(x_positions, valid_optimal_values, 40, [0.2 0.6 0.2], 'filled', ...
-                'MarkerEdgeColor', 'k', 'LineWidth', 0.5, 'MarkerFaceAlpha', 0.8);
+            scatter(x_positions, valid_optimal_values, 40, grey_color, 'filled', ...
+                'MarkerEdgeColor', 'none');
         end
     end
     
@@ -756,6 +760,9 @@ if ~isempty(all_optimal_sizes)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
+    ylim([0, 250]);
+    yticks(0:100:200);
+    yticklabels({'0', '100', '200'});
     xlabel('Cell Groups');
     ylabel('Optimal Spot Size (μm)');
     title(sprintf('Optimal Spot Size (%.0f%% of Peak Response) - Interpolated', percent_peak*100));
@@ -784,9 +791,9 @@ if ~isempty(all_optimal_sizes)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.png', test_type)));
-    % saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.fig', test_type)));
+    print(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.eps', test_type)), '-depsc', '-r300');
     
-    fprintf('\nOptimal spot size bar chart saved as: OptimalSpotSize_Interpolated_BarChart_%s.png\n', test_type);
+    fprintf('\nOptimal spot size bar chart saved as: OptimalSpotSize_Interpolated_BarChart_%s.png and .eps (vector)\n', test_type);
 end
 
 % ---------------- Optimal Spot Size Statistics ----------------
