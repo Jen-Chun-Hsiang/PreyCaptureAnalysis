@@ -18,17 +18,30 @@ if ~exist(save_fig_folder, 'dir')
 end
 a = load('\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\Spots\SusAlpha_RawData.mat');
 
+% ---------------- Color Configuration ----------------
+% Define group-specific colors (RGB values normalized to [0,1])
+group_colors = containers.Map();
+group_colors('AcuteZoneDT_ONSus_RF_GRN') = [180, 0, 180]/255;   % Magenta
+group_colors('DN_ONSus_RF_GRN') = [120, 0, 120]/255;           % Dark Magenta  
+group_colors('AcuteZoneDT_OFFSus_RF_GRN') = [0, 180, 0]/255;   % Green
+group_colors('DN_OFFSus_RF_GRN') = [0, 120, 0]/255;            % Dark Green
+
+group_colors('AcuteZoneDT_ONSus_RF_UV') = [180, 180, 180]/255;   % Magenta
+group_colors('DN_ONSus_RF_UV') = [120, 120, 120]/255;   % Magenta
+group_colors('AcuteZoneDT_OFFSus_RF_UV') = [180, 180, 180]/255;   % Magenta
+group_colors('DN_OFFSus_RF_UV') = [120, 120, 120]/255;   % Magenta
+
 % ---------------- Configuration ----------------
 if ~exist('a','var')
     error('Struct ''a'' not found in workspace.');
 end
 switch test_type
     case 'ON'
-        groups = {'AcuteZoneDT_ONSus_RF_GRN','DN_ONSus_RF_GRN'};  % edit/extend as needed
+        groups = {'AcuteZoneDT_ONSus_RF_GRN','DN_ONSus_RF_GRN', 'AcuteZoneDT_ONSus_RF_UV', 'DN_ONSus_RF_UV'};  % edit/extend as needed
         stim_idx = 110:300;  % during-stimulus period
         % stim_idx = 110:150;  % during-stimulus period
     case 'OFF'  
-        groups = {'AcuteZoneDT_OFFSus_RF_GRN','DN_OFFSus_RF_GRN'};  % edit/extend as needed
+        groups = {'AcuteZoneDT_OFFSus_RF_GRN','DN_OFFSus_RF_GRN', 'AcuteZoneDT_OFFSus_RF_UV', 'DN_OFFSus_RF_UV'};  % edit/extend as needed
         stim_idx = 310:500;  % during-stimulus period
         % stim_idx = 310:350;  % during-stimulus period
 end
@@ -52,8 +65,7 @@ fprintf('  Available sizes: %s\n', mat2str(sorted_sizes));
 results = struct();
 all_SI_values = [];
 all_group_labels = [];
-group_colors = lines(numel(groups));
-grey_color = 0.3*ones(1, 3);
+grey_color = 0.3*ones(1, 3);  % Grey color for individual data points
 
 for g = 1:numel(groups)
     gname = groups{g};
@@ -226,9 +238,18 @@ if ~isempty(all_SI_values)
         end
     end
     
-    % Create bar plot with error bars
+    % Create bar plot with error bars - using custom colors for each group
     hold on;
-    bars = bar(group_positions, mean_values, bar_width, 'FaceAlpha', 0.7, 'EdgeColor', 'none');
+    
+    % Plot bars individually with custom colors
+    for g = 1:numel(groups)
+        gname = groups{g};
+        if isfield(results, gname) && group_colors.isKey(gname)
+            bar_color = group_colors(gname);
+            bar(group_positions(g), mean_values(g), bar_width, 'FaceAlpha', 0.7, ...
+                'FaceColor', bar_color, 'EdgeColor', 'none');
+        end
+    end
     
     % Add error bars
     errorbar(group_positions, mean_values, sem_values, 'k', 'LineStyle', 'none', ...
@@ -256,9 +277,9 @@ if ~isempty(all_SI_values)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
-    ylim([-0.25 0.1])
-    yticks(-0.2:0.1:0.1)
-    yticklabels({'-0.2', '-0.1', '0', '0.1'})
+    % ylim([-0.25 0.1])
+    % yticks(-0.2:0.1:0.1)
+    % yticklabels({'-0.2', '-0.1', '0', '0.1'})
     xlabel('Cell Groups');
     ylabel('Size Index (SI)');
     title('Size Index: (Large Spot Response - Center Response) / Center Response');
@@ -339,9 +360,16 @@ if ~isempty(all_SI_values)
         mean_responses = mean(responses_matrix, 2, 'omitnan');
         sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
         
-        % Plot mean with error bars
-        errorbar(sizes, mean_responses, sem_responses, 'k-', 'LineWidth', 3, ...
-                 'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+        % Plot mean with error bars using group-specific color
+        if group_colors.isKey(gname)
+            group_color = group_colors(gname);
+            errorbar(sizes, mean_responses, sem_responses, '-', 'LineWidth', 3, ...
+                     'MarkerSize', 8, 'Color', group_color, 'MarkerFaceColor', group_color, 'MarkerEdgeColor', group_color);
+        else
+            % Fallback to black if color not defined
+            errorbar(sizes, mean_responses, sem_responses, 'k-', 'LineWidth', 3, ...
+                     'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+        end
         
         hold off;
         
@@ -539,18 +567,29 @@ if ~isempty(all_SI_values)
         hold on;
         time_axis = a.x1;
         
-        % Plot C trace (center) in blue
-        if ~isempty(C_traces)
-            fill([time_axis; flipud(time_axis)], [C_mean + C_sem; flipud(C_mean - C_sem)], ...
-                 [0.3 0.3 1], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-            plot(time_axis, C_mean, 'b-', 'LineWidth', 2, 'DisplayName', 'C (Center)');
+        % Get group-specific color
+        if group_colors.isKey(gname)
+            group_color = group_colors(gname);
+            % Create lighter version for S trace (50% lighter)
+            S_color = group_color + 0.5 * (1 - group_color);  
+        else
+            % Fallback colors
+            group_color = [0.3 0.3 1];  % Blue
+            S_color = [1 0.3 0.3];      % Red
         end
         
-        % Plot S trace (surround) in red
+        % Plot C trace (center) using group color
+        if ~isempty(C_traces)
+            fill([time_axis; flipud(time_axis)], [C_mean + C_sem; flipud(C_mean - C_sem)], ...
+                 group_color, 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis, C_mean, '-', 'LineWidth', 2, 'Color', group_color, 'DisplayName', 'C (Center)');
+        end
+        
+        % Plot S trace (surround) using lighter group color
         if ~isempty(S_traces)
             fill([time_axis; flipud(time_axis)], [S_mean + S_sem; flipud(S_mean - S_sem)], ...
-                 [1 0.3 0.3], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-            plot(time_axis, S_mean, 'r-', 'LineWidth', 2, 'DisplayName', 'S (Surround)');
+                 S_color, 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            plot(time_axis, S_mean, '-', 'LineWidth', 2, 'Color', S_color, 'DisplayName', 'S (Surround)');
         end
         
         % Add stimulus timing bar at the top of the plot
@@ -940,9 +979,18 @@ if ~isempty(all_optimal_sizes)
         end
     end
     
-    % Create bar plot with error bars
+    % Create bar plot with error bars - using custom colors for each group
     hold on;
-    bars = bar(group_positions, mean_optimal_values, bar_width, 'FaceAlpha', 0.7, 'FaceColor', [0.5 0.8 0.5], 'EdgeColor', 'none');
+    
+    % Plot bars individually with custom colors
+    for g = 1:numel(groups)
+        gname = groups{g};
+        if isfield(optimal_results, gname) && group_colors.isKey(gname)
+            bar_color = group_colors(gname);
+            bar(group_positions(g), mean_optimal_values(g), bar_width, 'FaceAlpha', 0.7, ...
+                'FaceColor', bar_color, 'EdgeColor', 'none');
+        end
+    end
     
     % Add error bars
     errorbar(group_positions, mean_optimal_values, sem_optimal_values, 'k', 'LineStyle', 'none', ...
@@ -970,9 +1018,9 @@ if ~isempty(all_optimal_sizes)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
-    ylim([0, 250]);
-    yticks(0:100:200);
-    yticklabels({'0', '100', '200'});
+    % ylim([0, 250]);
+    % yticks(0:100:200);
+    % yticklabels({'0', '100', '200'});
     xlabel('Cell Groups');
     ylabel('Optimal Spot Size (μm)');
     title(sprintf('Optimal Spot Size (%.0f%% of Peak Response) - Interpolated', percent_peak*100));
