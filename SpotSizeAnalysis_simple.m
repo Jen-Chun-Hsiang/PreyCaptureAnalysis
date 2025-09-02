@@ -8,8 +8,9 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'OFF';
+test_type = 'ON';
 percent_peak = 0.85;
+show_individual_traces = true;  % Set to true for individual cell traces, false for mean±SEM shaded plot
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple/';
@@ -321,7 +322,10 @@ else
 end
 
 % ---------------- Individual Cell Traces Plot ----------------
-% Create figure showing each cell trace of mean as function of spot size
+% Create figure showing cell responses vs spot size
+% Option: show_individual_traces controls plot type:
+%   true  = individual cell traces + group mean with error bars
+%   false = filled mean±SEM shaded plot (like temporal traces)
 if ~isempty(all_SI_values)
     figure('Color', 'w', 'Position', [200, 100, 1200, 600]);
     
@@ -341,34 +345,52 @@ if ~isempty(all_SI_values)
         responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
         n_cells = size(responses_matrix, 2);
         
-        % Plot each cell's response curve
-        hold on;
-        colors = lines(n_cells);  % Different color for each cell
-        
-        for c = 1:n_cells
-            cell_responses = responses_matrix(:, c);
-            
-            % Only plot if cell has valid responses (not all NaN)
-            if any(~isnan(cell_responses))
-                plot(sizes, cell_responses, '-o', 'Color', colors(c,:), ...
-                     'LineWidth', 1.5, 'MarkerSize', 6, 'MarkerFaceColor', colors(c,:), ...
-                     'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
-            end
-        end
-        
-        % Calculate and plot group mean
-        mean_responses = mean(responses_matrix, 2, 'omitnan');
-        sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
-        
-        % Plot mean with error bars using group-specific color
+        % Get group-specific color
         if group_colors.isKey(gname)
             group_color = group_colors(gname);
+        else
+            group_color = [0, 0, 0];  % Fallback to black
+        end
+        
+        hold on;
+        
+        if show_individual_traces
+            % Plot individual cell traces
+            colors = lines(n_cells);  % Different color for each cell
+            
+            for c = 1:n_cells
+                cell_responses = responses_matrix(:, c);
+                
+                % Only plot if cell has valid responses (not all NaN)
+                if any(~isnan(cell_responses))
+                    plot(sizes, cell_responses, '-o', 'Color', colors(c,:), ...
+                         'LineWidth', 1.5, 'MarkerSize', 6, 'MarkerFaceColor', colors(c,:), ...
+                         'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
+                end
+            end
+            
+            % Calculate and plot group mean
+            mean_responses = mean(responses_matrix, 2, 'omitnan');
+            sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
+            
+            % Plot mean with error bars using group-specific color
             errorbar(sizes, mean_responses, sem_responses, '-', 'LineWidth', 3, ...
                      'MarkerSize', 8, 'Color', group_color, 'MarkerFaceColor', group_color, 'MarkerEdgeColor', group_color);
         else
-            % Fallback to black if color not defined
-            errorbar(sizes, mean_responses, sem_responses, 'k-', 'LineWidth', 3, ...
-                     'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+            % Plot mean±SEM as filled area (similar to temporal traces)
+            mean_responses = mean(responses_matrix, 2, 'omitnan');
+            sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
+            
+            % Ensure sizes is a column vector to match mean_responses orientation
+            % (sizes is row vector, but mean_responses/sem_responses are column vectors)
+            sizes_col = sizes(:);  % Convert to column vector
+            
+            % Create filled area for SEM
+            fill([sizes_col; flipud(sizes_col)], [mean_responses + sem_responses; flipud(mean_responses - sem_responses)], ...
+                 group_color, 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            
+            % Plot mean line
+            plot(sizes, mean_responses, '-', 'LineWidth', 3, 'Color', group_color, 'MarkerSize', 8);
         end
         
         hold off;
@@ -399,12 +421,17 @@ if ~isempty(all_SI_values)
         
         % Add legend for the first subplot
         if g == 1
-            legend_entries = cell(n_cells + 1, 1);
-            for c = 1:n_cells
-                legend_entries{c} = sprintf('Cell %d', c);
+            if show_individual_traces
+                legend_entries = cell(n_cells + 1, 1);
+                for c = 1:n_cells
+                    legend_entries{c} = sprintf('Cell %d', c);
+                end
+                legend_entries{end} = 'Group Mean ± SEM';
+                legend(legend_entries, 'Location', 'best', 'FontSize', 8);
+            else
+                % For shaded plot, create a simpler legend
+                legend({'Mean ± SEM'}, 'Location', 'best', 'FontSize', 8);
             end
-            legend_entries{end} = 'Group Mean ± SEM';
-            legend(legend_entries, 'Location', 'best', 'FontSize', 8);
             
             % Add text box explaining line meanings
             text(0.02, 0.98, sprintf('Red dashed: Large sizes (%s)\nBlue dashed: Small size threshold (<%d)', ...
@@ -419,13 +446,20 @@ if ~isempty(all_SI_values)
     end
     
     % Add overall title
-    sgtitle(sprintf('Individual Cell Responses vs Spot Size (%s)', test_type), ...
-            'FontSize', 14, 'FontWeight', 'bold');
+    if show_individual_traces
+        sgtitle(sprintf('Individual Cell Responses vs Spot Size (%s)', test_type), ...
+                'FontSize', 14, 'FontWeight', 'bold');
+        plot_type_str = 'IndividualTraces';
+    else
+        sgtitle(sprintf('Mean Group Responses vs Spot Size (%s)', test_type), ...
+                'FontSize', 14, 'FontWeight', 'bold');
+        plot_type_str = 'GroupMean';
+    end
     
     % Save figure
-    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_IndividualTraces_%s.png', test_type)));
+    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_%s_%s.png', plot_type_str, test_type)));
     
-    fprintf('Individual traces figure saved as: SpotSizeAnalysis_IndividualTraces_%s.png\n', test_type);
+    fprintf('Cell responses figure saved as: SpotSizeAnalysis_%s_%s.png\n', plot_type_str, test_type);
 end
 
 % ---------------- C and S Temporal Traces Plot ----------------
