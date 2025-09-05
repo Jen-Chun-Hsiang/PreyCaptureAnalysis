@@ -10,7 +10,7 @@ spatial_params(2) = D2_mat/2;
 [x, y] = meshgrid(1:D1_mat, 1:D2_mat);
 spatial_filter = gaussian2d_one(x, y, spatial_params);
 spatial_filter_center = spatial_filter - median(spatial_filter(:)); % Zero mean
-spatial_filter_center = spatial_filter_center / max(abs(spatial_filter_center(:))); % Normalize
+spatial_filter_center = spatial_filter_center / sum(abs(spatial_filter_center(:))); % Normalize
 
 switch lower(surround_sf_type)
     case 'fixed'
@@ -20,7 +20,7 @@ switch lower(surround_sf_type)
 end
 spatial_filter = gaussian2d_one(x, y, spatial_params);
 spatial_filter_surround = spatial_filter - median(spatial_filter(:));
-spatial_filter_surround = spatial_filter_surround / max(abs(spatial_filter_surround(:))); % Normalize
+spatial_filter_surround = spatial_filter_surround / sum(abs(spatial_filter_surround(:))); % Normalize
 assert(size(spatial_filter_surround, 1) == D2_mat && size(spatial_filter_surround, 2) == D1_mat);
 % Create temporal filter from fitted parameters
 temporal_params = Gauss_TF_est(cell_idx, :);

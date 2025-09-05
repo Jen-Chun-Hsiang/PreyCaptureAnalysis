@@ -278,9 +278,9 @@ if ~isempty(all_SI_values)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
-    % ylim([-0.25 0.1])
-    % yticks(-0.2:0.1:0.1)
-    % yticklabels({'-0.2', '-0.1', '0', '0.1'})
+    ylim([-0.25 0.25])
+    yticks(-0.2:0.1:0.2)
+    yticklabels({'-0.2', '', '0', '', '0.2'})
     xlabel('Cell Groups');
     ylabel('Size Index (SI)');
     title('Size Index: (Large Spot Response - Center Response) / Center Response');
@@ -313,10 +313,9 @@ if ~isempty(all_SI_values)
     hold off;
     
     % Save figure
-    saveas(gcf, fullfile(save_fig_folder, 'SpotSizeAnalysis_SI_BarChart.png'));
-    print(gcf, fullfile(save_fig_folder, 'SpotSizeAnalysis_SI_BarChart.eps'), '-depsc', '-r300');
-    
-    fprintf('\nFigure saved as: SpotSizeAnalysis_SI_BarChart.png and .eps (vector)\n');
+    saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_SI_BarChart_%s.png', test_type)));
+    print(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_SI_BarChart_%s', test_type)), '-depsc', '-painters');
+    fprintf('\nFigure saved as: SpotSizeAnalysis_SI_BarChart_%s.png and .eps (vector)\n', test_type);
 else
     warning('No valid SI values calculated for any group.');
 end
@@ -329,32 +328,31 @@ end
 if ~isempty(all_SI_values)
     figure('Color', 'w', 'Position', [200, 100, 1200, 600]);
     
-    n_groups = numel(groups);
-    
-    for g = 1:n_groups
-        gname = groups{g};
-        if ~isfield(results, gname)
-            continue;
-        end
-        
-        % Create subplot for this group
-        subplot(1, n_groups, g);
-        
-        % Get data for this group
-        sizes = results.(gname).sizes;
-        responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
-        n_cells = size(responses_matrix, 2);
-        
-        % Get group-specific color
-        if group_colors.isKey(gname)
-            group_color = group_colors(gname);
-        else
-            group_color = [0, 0, 0];  % Fallback to black
-        end
-        
-        hold on;
-        
-        if show_individual_traces
+    if show_individual_traces
+        % Original behavior: separate subplot for each group
+        for g = 1:numel(groups)
+            gname = groups{g};
+            if ~isfield(results, gname)
+                continue;
+            end
+            
+            % Create subplot for this group
+            subplot(1, numel(groups), g);
+            
+            % Get data for this group
+            sizes = results.(gname).sizes;
+            responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
+            n_cells = size(responses_matrix, 2);
+            
+            % Get group-specific color
+            if group_colors.isKey(gname)
+                group_color = group_colors(gname);
+            else
+                group_color = [0, 0, 0];  % Fallback to black
+            end
+            
+            hold on;
+            
             % Plot individual cell traces
             colors = lines(n_cells);  % Different color for each cell
             
@@ -376,88 +374,196 @@ if ~isempty(all_SI_values)
             % Plot mean with error bars using group-specific color
             errorbar(sizes, mean_responses, sem_responses, '-', 'LineWidth', 3, ...
                      'MarkerSize', 8, 'Color', group_color, 'MarkerFaceColor', group_color, 'MarkerEdgeColor', group_color);
-        else
-            % Plot mean±SEM as filled area (similar to temporal traces)
-            mean_responses = mean(responses_matrix, 2, 'omitnan');
-            sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
             
-            % Ensure sizes is a column vector to match mean_responses orientation
-            % (sizes is row vector, but mean_responses/sem_responses are column vectors)
-            sizes_col = sizes(:);  % Convert to column vector
+            hold off;
             
-            % Create filled area for SEM
-            fill([sizes_col; flipud(sizes_col)], [mean_responses + sem_responses; flipud(mean_responses - sem_responses)], ...
-                 group_color, 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+            % Customize subplot
+            xlabel('Spot Size (μm)');
+            ylabel('Mean Response (spikes/s)');
+            title(sprintf('%s (n=%d)', strrep(gname, '_', '\_'), n_cells), ...
+                  'FontSize', 12, 'FontWeight', 'bold');
+            grid on;
             
-            % Plot mean line
-            plot(sizes, mean_responses, '-', 'LineWidth', 3, 'Color', group_color, 'MarkerSize', 8);
-        end
-        
-        hold off;
-        
-        % Customize subplot
-        xlabel('Spot Size (μm)');
-        ylabel('Mean Response (spikes/s)');
-        title(strrep(gname, '_', '\_'), 'FontSize', 12, 'FontWeight', 'bold');
-        grid on;
-        
-        % Set x-axis to linear scale from 0 to 1200
-        xlim([0, 1200]);
-        set(gca, 'XScale', 'linear');
-        xticks(0:200:1200);  % Tick marks every 200 μm
-        
-        % Add vertical lines to highlight size categories
-        y_limits = ylim;
-        
-        % Mark large sizes used for S calculation
-        for ls = large_sizes
-            if any(sizes == ls)
-                xline(ls, 'r--', 'LineWidth', 2);
+            % Set x-axis to linear scale from 0 to 1200
+            xlim([0, 1200]);
+            set(gca, 'XScale', 'linear');
+            xticks(0:200:1200);  % Tick marks every 200 μm
+            
+            % Add vertical lines to highlight size categories
+            y_limits = ylim;
+            
+            % Mark large sizes used for S calculation
+            for ls = large_sizes
+                if any(sizes == ls)
+                    xline(ls, 'r--', 'LineWidth', 2);
+                end
             end
-        end
-        
-        % Mark small size threshold
-        xline(small_size_threshold, 'b--', 'LineWidth', 2);
-        
-        % Add legend for the first subplot
-        if g == 1
-            if show_individual_traces
+            
+            % Mark small size threshold
+            xline(small_size_threshold, 'b--', 'LineWidth', 2);
+            
+            % Add legend for the first subplot
+            if g == 1
                 legend_entries = cell(n_cells + 1, 1);
                 for c = 1:n_cells
                     legend_entries{c} = sprintf('Cell %d', c);
                 end
                 legend_entries{end} = 'Group Mean ± SEM';
                 legend(legend_entries, 'Location', 'best', 'FontSize', 8);
-            else
-                % For shaded plot, create a simpler legend
-                legend({'Mean ± SEM'}, 'Location', 'best', 'FontSize', 8);
+                
+                % Add text box explaining line meanings
+                text(0.02, 0.98, sprintf('Red dashed: Large sizes (%s)\nBlue dashed: Small size threshold (<%d)', ...
+                    mat2str(large_sizes), small_size_threshold), ...
+                    'Units', 'normalized', 'VerticalAlignment', 'top', ...
+                    'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 8);
             end
-            
-            % Add text box explaining line meanings
-            text(0.02, 0.98, sprintf('Red dashed: Large sizes (%s)\nBlue dashed: Small size threshold (<%d)', ...
-                mat2str(large_sizes), small_size_threshold), ...
-                'Units', 'normalized', 'VerticalAlignment', 'top', ...
-                'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 8);
         end
         
-        % Add sample size to title
-        title(sprintf('%s (n=%d)', strrep(gname, '_', '\_'), n_cells), ...
-              'FontSize', 12, 'FontWeight', 'bold');
-    end
-    
-    % Add overall title
-    if show_individual_traces
         sgtitle(sprintf('Individual Cell Responses vs Spot Size (%s)', test_type), ...
                 'FontSize', 14, 'FontWeight', 'bold');
         plot_type_str = 'IndividualTraces';
+        
     else
-        sgtitle(sprintf('Mean Group Responses vs Spot Size (%s)', test_type), ...
+        % Group by cell type (everything before last two parts: RF_GRN or RF_UV)
+        % Extract unique cell types by removing the wavelength suffix
+        cell_types = {};
+        cell_type_groups = containers.Map();
+        
+        for g = 1:numel(groups)
+            gname = groups{g};
+            if ~isfield(results, gname)
+                continue;
+            end
+            
+            % Extract cell type by removing "_RF_GRN" or "_RF_UV" suffix
+            if contains(gname, '_RF_GRN')
+                cell_type = strrep(gname, '_RF_GRN', '');
+                wavelength = 'GRN';
+            elseif contains(gname, '_RF_UV')
+                cell_type = strrep(gname, '_RF_UV', '');
+                wavelength = 'UV';
+            else
+                cell_type = gname;  % Fallback if pattern doesn't match
+                wavelength = 'Unknown';
+            end
+            
+            % Add to cell type grouping
+            if ~cell_type_groups.isKey(cell_type)
+                cell_types{end+1} = cell_type;
+                cell_type_groups(cell_type) = {};
+            end
+            current_groups = cell_type_groups(cell_type);
+            current_groups{end+1} = struct('name', gname, 'wavelength', wavelength);
+            cell_type_groups(cell_type) = current_groups;
+        end
+        
+        n_cell_types = numel(cell_types);
+        
+        for ct = 1:n_cell_types
+            cell_type = cell_types{ct};
+            type_groups = cell_type_groups(cell_type);
+            
+            % Create subplot for this cell type
+            subplot(1, n_cell_types, ct);
+            hold on;
+            
+            legend_entries = {};
+            
+            for tg = 1:numel(type_groups)
+                gname = type_groups{tg}.name;
+                wavelength = type_groups{tg}.wavelength;
+                
+                if ~isfield(results, gname)
+                    continue;
+                end
+                
+                % Get data for this group
+                sizes = results.(gname).sizes;
+                responses_matrix = results.(gname).responses_matrix;  % nSizes x nCells
+                n_cells = size(responses_matrix, 2);
+                
+                % Get group-specific color
+                if group_colors.isKey(gname)
+                    group_color = group_colors(gname);
+                else
+                    % Assign colors based on wavelength if no specific color
+                    if strcmp(wavelength, 'GRN')
+                        group_color = [0, 0.7, 0];  % Green
+                    elseif strcmp(wavelength, 'UV')
+                        group_color = [0.5, 0.5, 0.5];  % Gray
+                    else
+                        group_color = [0, 0, 0];  % Black fallback
+                    end
+                end
+                
+                % Plot mean±SEM as filled area (similar to temporal traces)
+                mean_responses = mean(responses_matrix, 2, 'omitnan');
+                sem_responses = std(responses_matrix, 0, 2, 'omitnan') ./ sqrt(sum(~isnan(responses_matrix), 2));
+                
+                % Ensure sizes is a column vector to match mean_responses orientation
+                sizes_col = sizes(:);  % Convert to column vector
+                
+                % Create filled area for SEM
+                fill([sizes_col; flipud(sizes_col)], [mean_responses + sem_responses; flipud(mean_responses - sem_responses)], ...
+                     group_color, 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+                
+                % Plot mean line
+                plot(sizes, mean_responses, '-', 'LineWidth', 3, 'Color', group_color, 'MarkerSize', 8, ...
+                     'DisplayName', sprintf('%s (n=%d)', wavelength, n_cells));
+                
+                legend_entries{end+1} = sprintf('%s (n=%d)', wavelength, n_cells);
+            end
+            
+            hold off;
+            
+            % Customize subplot
+            xlabel('Spot Size (μm)');
+            ylabel('Mean Response (spikes/s)');
+            title(strrep(cell_type, '_', '\_'), 'FontSize', 12, 'FontWeight', 'bold');
+            grid off;
+            
+            % Set x-axis to linear scale from 0 to 1200
+            xlim([0, 1200]);
+            set(gca, 'XScale', 'linear');
+            xticks(0:400:1200);  % Tick marks every 400 μm
+            xticklabels({'0', '400', '800', '1200'});
+            
+            ylim([0, 150]);
+            yticks(0:50:150);
+            yticklabels({'0', '50', '100', '150'});
+            % Add vertical lines to highlight size categories
+            % Mark large sizes used for S calculation
+            for ls = large_sizes
+                if any(sizes == ls)
+                    xline(ls, 'r--', 'LineWidth', 2);
+                end
+            end
+            
+            % Mark small size threshold
+            xline(small_size_threshold, 'b--', 'LineWidth', 2);
+            
+            % Add legend
+            if numel(type_groups) > 1
+                legend(legend_entries, 'Location', 'best', 'FontSize', 8);
+            end
+            
+            % Add text box explaining line meanings for first subplot
+            if ct == 1
+                text(0.02, 0.98, sprintf('Red dashed: Large sizes (%s)\nBlue dashed: Small size threshold (<%d)', ...
+                    mat2str(large_sizes), small_size_threshold), ...
+                    'Units', 'normalized', 'VerticalAlignment', 'top', ...
+                    'BackgroundColor', [1 1 1 0.8], 'EdgeColor', 'k', 'FontSize', 8);
+            end
+        end
+        
+        sgtitle(sprintf('Mean Group Responses vs Spot Size by Cell Type (%s)', test_type), ...
                 'FontSize', 14, 'FontWeight', 'bold');
-        plot_type_str = 'GroupMean';
+        plot_type_str = 'GroupMeanByCellType';
     end
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_%s_%s.png', plot_type_str, test_type)));
+    print(gcf, fullfile(save_fig_folder, sprintf('SpotSizeAnalysis_%s_%s', plot_type_str, test_type)), '-depsc', '-painters');
     
     fprintf('Cell responses figure saved as: SpotSizeAnalysis_%s_%s.png\n', plot_type_str, test_type);
 end
@@ -652,14 +758,43 @@ if ~isempty(all_SI_values)
                  'FontSize', 8, 'FontWeight', 'bold', 'Color', 'k');
         end
         
-        hold off;
         
+
+        % --- Add scale bars ---
+        % Define scale bar sizes
+        vert_length = 50; % spikes/s
+        horiz_length = 1; % seconds
+
+        % Find suitable position (bottom left, with some padding)
+        xlims = [0 time_axis(end)];
+        xlim(xlims);
+        ylims = [-10 250];
+        ylim(ylims);
+        x_start = xlims(1) + 0.08 * range(xlims);
+        y_start = ylims(1) + 0.12 * range(ylims);
+
+        % Vertical bar (50 spikes/s)
+        plot([x_start, x_start], [y_start, y_start + vert_length], 'k', 'LineWidth', 2);
+
+        % Horizontal bar (1 s)
+        plot([x_start, x_start + horiz_length], [y_start, y_start], 'k', 'LineWidth', 2);
+
+        % Connect the top of vertical bar to end of horizontal bar
+        % plot([x_start, x_start + horiz_length], [y_start + vert_length, y_start], 'k', 'LineWidth', 1);
+
+        % Optional: Add text labels
+        text(x_start - 0.02*range(xlims), y_start + vert_length/2, '50', ...
+            'HorizontalAlignment', 'right', 'VerticalAlignment', 'middle', 'FontSize', 9, 'FontWeight', 'bold');
+        text(x_start + horiz_length/2, y_start - 0.04*range(ylims), '1 s', ...
+            'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 9, 'FontWeight', 'bold');
+        
+        hold off;
         % Customize subplot
         xlabel('Time (s)');
         ylabel('Response (spikes/s)');
         title(sprintf('%s\nC vs S Temporal Traces', strrep(gname, '_', '\_')), ...
               'FontSize', 11, 'FontWeight', 'bold');
-        grid on;
+        grid off;
         legend('Location', 'best');
         
         % Add sample sizes to title
@@ -678,7 +813,7 @@ if ~isempty(all_SI_values)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('C_S_TemporalTraces_%s.png', test_type)));
-    print(gcf, fullfile(save_fig_folder, sprintf('C_S_TemporalTraces_%s.eps', test_type)), '-depsc', '-r300');
+    print(gcf, fullfile(save_fig_folder, sprintf('C_S_TemporalTraces_%s', test_type)), '-depsc', '-painters');
     
     fprintf('\nC and S temporal traces figure saved as: C_S_TemporalTraces_%s.png and .eps\n', test_type);
 end
@@ -1052,9 +1187,9 @@ if ~isempty(all_optimal_sizes)
     xlim([0.5, numel(groups) + 0.5]);
     xticks(group_positions);
     xticklabels(strrep(groups, '_', '\_'));
-    % ylim([0, 250]);
-    % yticks(0:100:200);
-    % yticklabels({'0', '100', '200'});
+    ylim([0, 400]);
+    yticks(0:100:400);
+    yticklabels({'0', '', '200', '', '400'});
     xlabel('Cell Groups');
     ylabel('Optimal Spot Size (μm)');
     title(sprintf('Optimal Spot Size (%.0f%% of Peak Response) - Interpolated', percent_peak*100));
@@ -1083,7 +1218,7 @@ if ~isempty(all_optimal_sizes)
     
     % Save figure
     saveas(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.png', test_type)));
-    print(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s.eps', test_type)), '-depsc', '-r300');
+    print(gcf, fullfile(save_fig_folder, sprintf('OptimalSpotSize_Interpolated_BarChart_%s', test_type)), '-depsc', '-painters');
     
     fprintf('\nOptimal spot size bar chart saved as: OptimalSpotSize_Interpolated_BarChart_%s.png and .eps (vector)\n', test_type);
 end

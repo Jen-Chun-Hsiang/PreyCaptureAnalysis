@@ -31,6 +31,11 @@ switch set_name
                     'Temporal',                      'Temporal',  'Temporal','Temporal','Temporal', 'Temporal',...
                     'Temporal'};
 end
+
+save_fig_folder = './Figures/MovingBarSummary/';
+if ~exist(save_fig_folder, 'dir')
+    mkdir(save_fig_folder);
+end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
@@ -242,12 +247,19 @@ if is_show_fitted
         xlabel('Cell (sorted by repeat reliability)');
         ylabel('Correlation coefficient');
         title([groups{g} ' (n=' num2str(sum(group_mask)) ')']);
+        xticks(1:2:length(sorted_cbas));
+        xticklabels(arrayfun(@num2str, 1:2:length(sorted_cbas), 'UniformOutput', false));
+        yticks(0:0.25:1);
+        yticklabels(arrayfun(@num2str, 0:0.25:1, 'UniformOutput', false));
         ylim([0 1]);
         legend('Location', 'best');
-        grid on;
+        grid off;
     end
     sgtitle('Model Performance: LN vs LNK vs Repeat Reliability');
-    
+
+    saveas(gcf, fullfile(save_fig_folder, 'Model-Performance-LN-LNK.png'));
+    print(gcf, fullfile(save_fig_folder, 'Model-Performance-LN-LNK'), '-depsc', '-painters');
+
     % Figure for Csw (bar chart) - 2 subplots for ON/OFF with 2 bars each (Temporal vs Nasal averages)
     figure('Name', 'Subunit Weights (Csw)');
     
