@@ -25,6 +25,7 @@ assert(size(spatial_filter_surround, 1) == D2_mat && size(spatial_filter_surroun
 % Create temporal filter from fitted parameters
 temporal_params = Gauss_TF_est(cell_idx, :);
 temporal_filter = diffgauss_tf(1:D3_mat, temporal_params);
+temporal_filter = temporal_filter - temporal_filter(1);
 temporal_filter = temporal_filter / sum(abs(temporal_filter)); % Normalize
 
 % spatiotemporal_filter = spatial_filter .* reshape(temporal_filter, 1, 1, []);

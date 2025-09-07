@@ -38,7 +38,7 @@ load([load_data_folder recording_name '.mat'], 'masked_STAmat', 'stdSTA');
 assert(size(stdSTA, 1) == D1_mat && size(stdSTA, 2) == D2_mat, 'stdSTA size mismatch');
 clear masked_STAmat;
 
-for ii = 24:24   %num_recording
+for ii = 1:num_recording   %num_recording
     recording_name = recording_sets{ii};
     
 
