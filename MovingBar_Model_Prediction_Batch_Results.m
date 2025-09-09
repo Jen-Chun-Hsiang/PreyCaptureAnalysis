@@ -12,7 +12,7 @@ recording_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101
 Fz = 100;
 num_recording = length(recording_sets);
 all_corr = nan(num_recording, 11);
-all_SC = nan(num_recording, 3);
+all_SC = nan(num_recording, 4);
 is_plot = 0;
 
 %%

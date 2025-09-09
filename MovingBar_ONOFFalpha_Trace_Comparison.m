@@ -39,9 +39,9 @@ end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
-Cdat = nan(num_set, 9);
+Cdat = nan(num_set, 10);
 Cbas = nan(num_set, 1);
-Csw = nan(num_set, 3);
+Csw = nan(num_set, 4);
 % Add LNK_params array to collect parameters
 LNK_params_array = nan(num_set, 10); % 10 columns for the specified parameters
 implement_case_id = 6;
@@ -50,11 +50,13 @@ for i = 1:num_set
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
         file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
-        loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w', 'LN_params_s');
+        loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults',...
+         'BaselineCorr', 'LNK_params_s', 'LNK_params_w', 'LN_params_s', 'LNK_params_d');
         Cdat(i, :) = loaded_data.PredictionResults;
         Cbas(i, :) = loaded_data.BaselineCorr;
-        Csw(i, :) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs loaded_data.LN_params_s.gamma];
-        
+        Csw(i, :) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs,...
+                     loaded_data.LN_params_s.gamma loaded_data.LNK_params_d.w_xs];
+
         % Collect LNK_params_w parameters in specified order
         % Order: 'tau', 'alpha_d', 'theta', 'sigma0', 'alpha', 'beta', 'b_out', 'g_out', 'w_xs', 'dt'
         LNK_params_array(i, 1) = getfield_safe(loaded_data.LNK_params_w, 'tau');

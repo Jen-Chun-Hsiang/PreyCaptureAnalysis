@@ -42,12 +42,27 @@ end
 
 clear prm_temp
 if is_fitLNK_divnorm_rate_scw
-    lnk_corr_temp_s = nan(num_lnk_test, 1);
+    lnk_corr_temp_d = nan(num_lnk_test, 1);
     tic
     for lnk = 1:num_lnk_test
-        fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-        [prm_d, r_hat_d, a_hat, fval] = fitLN_divnorm_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
-            'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
+        fprintf('Fitting LN divisive normalization model with CSR constraint %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+        
+        % Use CSR_value if it exists, otherwise use default
+        if exist('CSR_value', 'var') && ~isempty(CSR_value)
+            current_csr = CSR_value;
+            if lnk == 1
+                fprintf('Using CSR constraint: %.3f\n', current_csr);
+            end
+        else
+            current_csr = 0.09; % default value
+            if lnk == 1
+                fprintf('Using default CSR constraint: %.3f\n', current_csr);
+            end
+        end
+
+        [prm_d, r_hat_d, C_fast, C_slow, fval] = fitLN_divnorm_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
+            'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
+            'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', CSRStrength);
         if lnk == 1
             r_hat_temp_d = nan(num_lnk_test, length(r_hat_d));
         end

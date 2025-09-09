@@ -121,10 +121,16 @@ exp(isnan(exp)) = 0;
 
 is_fitLNK_rate_two = 0;
 is_fitLNK_divnorm_rate_scw = 1;
-is_fitLNK_rate_scw = 1;
+is_fitLNK_rate_scw = 0;
+is_fitGainControl = 0;
 test_LNK_fitting
 [sim_nl, LN_params] = fit_linear_transform(sim*1e6, exp);
-[sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
+% Check if CSR values are available and pass them to the fitting function
+if exist('CSR_value', 'var') && exist('CSRStrength', 'var')
+    [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6, 'CSR_value', CSR_value, 'CSRStrength', CSRStrength);
+else
+    [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
+end
 if is_fitLNK_rate_two
     r_hat_s_corr = corr(exp(:), r_hat_s(:));
     LNK_params_s = prm_s;
@@ -157,61 +163,71 @@ LNK_params = prm;
 
 
 
+%% Fit gain control model
+if is_fitGainControl
+    csim = sim;
+    csim = csim*1e6;
+    gain_params = [200, 100, 0.3, 1, 0.01, 0.01];
 
-%%
-keyboard;
+    for i = 1:2
+        switch i
+            case 1
+                is_sigmoid = 0;
+            case 2
+                is_sigmoid = 1;
+        end
+        tic
+        if is_sigmoid
+            CostF = @(w) mean((max([gain_control_system_opt_sigmoid([gain_params(1:2) w(1:4)], csim).*w(5)+...
+                w(6);zeros(1, length(csim))], [], 1)-exp').^2, 'omitnan');
+            [OptW,fval] = fmincon(CostF, ...
+                [0.1   1    0.01   0.01  1     0    ], [], [], [], [],...
+                [1e-8  0    1e-8   -2    1e-3  -200 ],...
+                [1    1e3   2      2     1e7   200  ]);
+        else
+            CostF = @(w) mean((max([gain_control_system_opt([gain_params(1:2) w(1:4)], csim).*w(5)+...
+                w(6);zeros(1, length(csim))], [], 1)-exp').^2, 'omitnan');
+            [OptW,fval] = fmincon(CostF, ...
+                [0.1   1    4   0.01    1     0    ], [], [], [], [],...
+                [1e-8  0    1   -4      1e-3  -200 ],...
+                [1    1e3   10   4      1e7   200  ]);
+        end
+        y = max([gain_control_system_opt([gain_params(1:2) OptW(1:4)], csim).*OptW(5)+OptW(6);
+            zeros(1, length(csim))], [], 1);
+        ct = (0:length(sim)-1)/Fz;
+        PredictionResults(i) = corr(exp(:), y(:));
+        PredTraces{i, 1} = exp(:);
+        PredTraces{i, 2} = y(:);
+        figure; hold on
+        plot(ct, exp, 'Color', 0.5*ones(1, 3));
+        plot(ct, y, 'b');
+        xlim([0 ct(end)]);
+        xlabel('Time (s)');
+        ylabel('Firing rate (spike/s)');
+        clc
+        fprintf('progress... %d/%d, %d/%d %.2f s\n', ii, num_recording, i, 2, toc);
 
-%%
-csim = sim;
-csim = csim*1e6;
-gain_params = [200, 100, 0.3, 1, 0.01, 0.01];
+        %%
 
-for i = 1:2
-    switch i
-        case 1
-            is_sigmoid = 0;
-        case 2
-            is_sigmoid = 1;
+        save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
+        save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
+            'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d');
     end
-    tic
-    if is_sigmoid
-        CostF = @(w) mean((max([gain_control_system_opt_sigmoid([gain_params(1:2) w(1:4)], csim).*w(5)+...
-            w(6);zeros(1, length(csim))], [], 1)-exp').^2, 'omitnan');
-        [OptW,fval] = fmincon(CostF, ...
-            [0.1   1    0.01   0.01  1     0    ], [], [], [], [],...
-            [1e-8  0    1e-8   -2    1e-3  -200 ],...
-            [1    1e3   2      2     1e7   200  ]);
-    else
-        CostF = @(w) mean((max([gain_control_system_opt([gain_params(1:2) w(1:4)], csim).*w(5)+...
-            w(6);zeros(1, length(csim))], [], 1)-exp').^2, 'omitnan');
-        [OptW,fval] = fmincon(CostF, ...
-            [0.1   1    4   0.01    1     0    ], [], [], [], [],...
-            [1e-8  0    1   -4      1e-3  -200 ],...
-            [1    1e3   10   4      1e7   200  ]);
+else
+    % If gain control fitting is disabled, set default values for gain control indices
+    PredictionResults(1:2) = NaN;
+    PredTraces = cell(2, 2);
+    for i = 1:2
+        PredTraces{i, 1} = exp(:);
+        PredTraces{i, 2} = NaN(size(exp));
     end
-    y = max([gain_control_system_opt([gain_params(1:2) OptW(1:4)], csim).*OptW(5)+OptW(6);
-        zeros(1, length(csim))], [], 1);
-    ct = (0:length(sim)-1)/Fz;
-    PredictionResults(i) = corr(exp(:), y(:));
-    PredTraces{i, 1} = exp(:);
-    PredTraces{i, 2} = y(:);
-    figure; hold on
-    plot(ct, exp, 'Color', 0.5*ones(1, 3));
-    plot(ct, y, 'b');
-    xlim([0 ct(end)]);
-    xlabel('Time (s)');
-    ylabel('Firing rate (spike/s)');
-    clc
-    fprintf('progress... %d/%d, %d/%d %.2f s\n', ii, num_recording, i, 2, toc);
-
-    %%
-
+    
     save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
         'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
-all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs LN_params_s.gamma];
+all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs LN_params_s.gamma LNK_params_d.w_xs];
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])

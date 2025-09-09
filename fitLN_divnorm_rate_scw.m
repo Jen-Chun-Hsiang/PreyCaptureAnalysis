@@ -21,6 +21,10 @@ function [params, rate_hat, C_fast, C_slow, fval] = fitLN_divnorm_rate_scw(x, x_
 %  'OutputNL' : 'softplus' or 'linear'
 %  'Ridge' : L2 penalty on params
 %  'MultiStart' : number of random restarts (default 5)
+%  'CSR'          : center-surround ratio value (measured independently)
+%  'CSRMetric'    : 'S_over_C' (default), 'C_over_S', or 'CSI'
+%  'SurroundSign' : -1 (default, inhibitory) or +1 (excitatory)
+%  'CSRStrength'  : strength of soft penalty toward CSR-derived w_xs (default 10)
 %
 % OUTPUTS
 %  params : struct of fitted parameters
@@ -36,6 +40,11 @@ opts.Delta = 1.0;
 opts.OutputNL = 'softplus';
 opts.Ridge = 0;
 opts.MultiStart = 5; % number of random starts
+% --- Center-surround weight options ---
+opts.CSR          = [];         % numeric value of your center-surround measure
+opts.CSRMetric    = 'S_over_C'; % 'S_over_C', 'C_over_S', or 'CSI'
+opts.SurroundSign = -1;         % -1 for inhibitory surround, +1 for excitatory
+opts.CSRStrength  = 10;         % strength of soft penalty
 
 % parse varargin
 if ~isempty(varargin)
@@ -48,11 +57,33 @@ x = x(:); x_s = x_s(:); y_rate = y_rate(:);
 T = numel(x);
 if isempty(opts.Weights), opts.Weights = ones(T,1); else, opts.Weights = opts.Weights(:); end
 
+% Validate CSR inputs
+if ~isempty(opts.CSR)
+    if ~isnumeric(opts.CSR) || numel(opts.CSR) ~= 1
+        error('CSR must be a scalar numeric value');
+    end
+    if ~ismember(lower(opts.CSRMetric), {'s_over_c', 'c_over_s', 'csi'})
+        error('CSRMetric must be ''S_over_C'', ''C_over_S'', or ''CSI''');
+    end
+    if ~ismember(opts.SurroundSign, [-1, 1])
+        error('SurroundSign must be -1 (inhibitory) or +1 (excitatory)');
+    end
+    fprintf('Using CSR constraint: %s = %.3f, strength = %.1f\n', ...
+            opts.CSRMetric, opts.CSR, opts.CSRStrength);
+end
+
 % ---- init ----
 init = defaultInit_ln(x, x_s, y_rate, dt);
 fn = fieldnames(init);
 for i = 1:numel(fn)
     if isfield(opts.Init, fn{i}), init.(fn{i}) = opts.Init.(fn{i}); end
+end
+
+% If CSR is provided, initialize w_xs closer to the target
+if ~isempty(opts.CSR)
+    wxs_target = mapCSRtoWxs(opts.CSR, opts.CSRMetric, opts.SurroundSign);
+    init.w_xs = wxs_target + 0.01*randn; % small noise around target
+    fprintf('Target w_xs from CSR: %.3f, initialized at: %.3f\n', wxs_target, init.w_xs);
 end
 
 p0 = packParams_ln(init);
@@ -102,6 +133,13 @@ p_hat = bestp; fval = bestf;
 
 params = unpackParams_ln(p_hat);
 [rate_hat, C_fast, C_slow] = forwardLN_divnorm(x, x_s, params, dt, opts.OutputNL);
+
+% Display final w_xs vs target if CSR was used
+if ~isempty(opts.CSR)
+    wxs_target = mapCSRtoWxs(opts.CSR, opts.CSRMetric, opts.SurroundSign);
+    fprintf('Final w_xs: %.3f (target: %.3f, deviation: %.3f)\n', ...
+            params.w_xs, wxs_target, params.w_xs - wxs_target);
+end
 
 end
 
@@ -153,8 +191,8 @@ T = numel(x);
 C_fast = zeros(T,1);
 C_slow = zeros(T,1);
 
-drive = x; % center weight fixed at 1, surround scaled
 % init contrast to mean absolute drive
+drive = x;
 C_fast(1) = mean(abs(drive));
 C_slow(1) = mean(abs(drive));
 
@@ -166,7 +204,7 @@ end
 den = s.sigma0 + s.gamma_f * C_fast + s.gamma_s * C_slow;
 den(den < 1e-9) = 1e-9;
 
-ytilde = (x + s.w_xs * x_s) ./ den + s.b_out;
+ytilde = x ./ den + s.w_xs * x_s ./ den + s.b_out;
 
 switch lower(outNL)
     case 'softplus'
@@ -198,10 +236,55 @@ end
 
 f = f + opts.Ridge * (p(:).' * p(:));
 
+% Soft center-surround weight constraint
+if ~isempty(opts.CSR)
+    wxs_target = mapCSRtoWxs(opts.CSR, opts.CSRMetric, opts.SurroundSign);
+    csr_penalty = opts.CSRStrength * (s.w_xs - wxs_target)^2;
+    f = f + csr_penalty;
+end
+
 if nargout>1, grad = []; end
 end
 
 function y = softplus(z)
 % numerically stable softplus
 y = log1p(exp(-abs(z))) + max(z,0);
+end
+
+% --- helper for mapping CSR to w_xs ---
+function wxs_target = mapCSRtoWxs(CSR, metric, surroundSign)
+% Map center-surround ratio to target w_xs value
+%
+% INPUTS:
+%   CSR         : measured center-surround ratio (should be positive magnitude)
+%   metric      : 'S_over_C', 'C_over_S', or 'CSI'
+%   surroundSign: -1 (inhibitory) or +1 (excitatory)
+%
+% OUTPUT:
+%   wxs_target  : target value for w_xs parameter
+
+% Ensure CSR is treated as a magnitude (positive value)
+CSR = abs(CSR);
+
+switch lower(metric)
+    case 's_over_c'
+        % CSR = |Surround response| / |Center response|
+        k = CSR;
+    case 'c_over_s'
+        % CSR = |Center response| / |Surround response|
+        % Convert to S_over_C format
+        k = 1 / max(CSR, eps);
+    case 'csi'
+        % Center-Surround Index: CSI = (C - S) / (C + S)
+        % For inhibitory surround, CSI > 0 means C > |S|
+        % For excitatory surround, CSI < 0 means S > C
+        % Solve for |S|/|C| from CSI
+        r = max(min(CSR, 0.999), -0.999); % clamp to avoid division by zero
+        k = abs((1 - r) / (1 + r));
+    otherwise
+        error('Unknown CSRMetric. Use ''S_over_C'', ''C_over_S'', or ''CSI''.');
+end
+
+% Apply sign based on surround type
+wxs_target = surroundSign * k;
 end
