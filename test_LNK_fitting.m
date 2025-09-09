@@ -20,76 +20,82 @@ prm = prm_temp{bestblk};
 r_hat = r_hat_temp(bestblk, :);
 
 clear prm_temp
-lnk_corr_temp_s = nan(num_lnk_test, 1);
-tic
-for lnk = 1:num_lnk_test
-    fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-    [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
-        'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
-    if lnk == 1
-        r_hat_temp_s = nan(num_lnk_test, length(r_hat_s));
-    end
-    prm_temp{lnk} = prm_s;
-    r_hat_temp_s(lnk, :) = r_hat_s;
-    lnk_corr_temp_s(lnk) = corr(exp(:), r_hat_s(:));
+if is_fitLNK_rate_two
+    lnk_corr_temp_s = nan(num_lnk_test, 1);
+    tic
+    for lnk = 1:num_lnk_test
+        fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+        [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
+            'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
+        if lnk == 1
+            r_hat_temp_s = nan(num_lnk_test, length(r_hat_s));
+        end
+        prm_temp{lnk} = prm_s;
+        r_hat_temp_s(lnk, :) = r_hat_s;
+        lnk_corr_temp_s(lnk) = corr(exp(:), r_hat_s(:));
 
+    end
+    [~, bestblk] = max(lnk_corr_temp_s);
+    prm_s = prm_temp{bestblk};
+    r_hat_s = r_hat_temp_s(bestblk, :);
 end
-[~, bestblk] = max(lnk_corr_temp_s);
-prm_s = prm_temp{bestblk};
-r_hat_s = r_hat_temp_s(bestblk, :);
 
 clear prm_temp
-% lnk_corr_temp_c = nan(num_lnk_test, 1);
-% tic
-% for lnk = 1:num_lnk_test
-%     fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-%     [prm_c, r_hat_c, a_hat, fval] = fitLNK_rate_combo(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
-%         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
-%     if lnk == 1
-%         r_hat_temp_c = nan(num_lnk_test, length(r_hat_c));
-%     end
-%     prm_temp{lnk} = prm_c;
-%     r_hat_temp_c(lnk, :) = r_hat_c;
-%     lnk_corr_temp_c(lnk) = corr(exp(:), r_hat_c(:));
-
-% end
-% [~, bestblk] = max(lnk_corr_temp_c);
-% prm_c = prm_temp{bestblk};
-% r_hat_c = r_hat_temp_c(bestblk, :);
+if is_fitLNK_divnorm_rate_scw
+    lnk_corr_temp_s = nan(num_lnk_test, 1);
+    tic
+    for lnk = 1:num_lnk_test
+        fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+        [prm_d, r_hat_d, a_hat, fval] = fitLN_divnorm_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
+            'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
+        if lnk == 1
+            r_hat_temp_d = nan(num_lnk_test, length(r_hat_d));
+        end
+        prm_temp{lnk} = prm_d;
+        r_hat_temp_d(lnk, :) = r_hat_d;
+        lnk_corr_temp_d(lnk) = corr(exp(:), r_hat_d(:));
+    end
+    [~, bestblk] = max(lnk_corr_temp_d);
+    prm_d = prm_temp{bestblk};
+    r_hat_d = r_hat_temp_d(bestblk, :);
+end
 
 clear prm_temp
-lnk_corr_temp_w = nan(num_lnk_test, 1);
-tic
-for lnk = 1:num_lnk_test
-    fprintf('Fitting LNK model with CSR constraint %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+if is_fitLNK_rate_scw
     
-    % Use CSR_value if it exists, otherwise use default
-    if exist('CSR_value', 'var') && ~isempty(CSR_value)
-        current_csr = CSR_value;
-        if lnk == 1
-            fprintf('Using CSR constraint: %.3f\n', current_csr);
+    lnk_corr_temp_w = nan(num_lnk_test, 1);
+    tic
+    for lnk = 1:num_lnk_test
+        fprintf('Fitting LNK model with CSR constraint %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
+        
+        % Use CSR_value if it exists, otherwise use default
+        if exist('CSR_value', 'var') && ~isempty(CSR_value)
+            current_csr = CSR_value;
+            if lnk == 1
+                fprintf('Using CSR constraint: %.3f\n', current_csr);
+            end
+        else
+            current_csr = 0.09; % default value
+            if lnk == 1
+                fprintf('Using default CSR constraint: %.3f\n', current_csr);
+            end
         end
-    else
-        current_csr = 0.09; % default value
+        
+        [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
+            'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
+            'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', CSRStrength);
         if lnk == 1
-            fprintf('Using default CSR constraint: %.3f\n', current_csr);
+            r_hat_temp_w = nan(num_lnk_test, length(r_hat_w));
         end
-    end
-    
-    [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
-        'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
-        'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', CSRStrength);
-    if lnk == 1
-        r_hat_temp_w = nan(num_lnk_test, length(r_hat_w));
-    end
-    prm_temp{lnk} = prm_w;
-    r_hat_temp_w(lnk, :) = r_hat_w;
-    lnk_corr_temp_w(lnk) = corr(exp(:), r_hat_w(:));
+        prm_temp{lnk} = prm_w;
+        r_hat_temp_w(lnk, :) = r_hat_w;
+        lnk_corr_temp_w(lnk) = corr(exp(:), r_hat_w(:));
 
+    end
+    [~, bestblk] = max(lnk_corr_temp_w);
+    prm_w = prm_temp{bestblk};
+    r_hat_w = r_hat_temp_w(bestblk, :);
 end
-[~, bestblk] = max(lnk_corr_temp_w);
-prm_w = prm_temp{bestblk};
-r_hat_w = r_hat_temp_w(bestblk, :);
 %%
 is_save_lnk = 0;
 if is_save_lnk
@@ -101,7 +107,7 @@ end
 
 %%
 if is_plot
-    x_lim_range = [28 52];
+    x_lim_range = [ct(1) ct(end)];
     close all;
     figure;
     subplot(4, 1, 1)

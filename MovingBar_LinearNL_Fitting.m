@@ -39,7 +39,7 @@ sim = [];
 exp = [];
 sim_s = [];
 num_repeat = size(Data, 5);
-q_ids = 1; % contrast
+q_ids = 1:3; % contrast
 bw_ids = 1:5; % barwidth
 sp_ids = 1:5; % speed
 for k = 1:num_repeat
@@ -119,16 +119,44 @@ sim(isnan(sim)) = 0;
 sim_s(isnan(sim_s)) = 0;
 exp(isnan(exp)) = 0;
 
+is_fitLNK_rate_two = 0;
+is_fitLNK_divnorm_rate_scw = 1;
+is_fitLNK_rate_scw = 1;
 test_LNK_fitting
 [sim_nl, LN_params] = fit_linear_transform(sim*1e6, exp);
 [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
-PredictionResults( 3:end) = [corr(exp(:), r_hat(:))   corr(exp(:), r_hat_s(:)),...
+if is_fitLNK_rate_two
+    r_hat_s_corr = corr(exp(:), r_hat_s(:));
+    LNK_params_s = prm_s;
+else
+    r_hat_s_corr = nan; 
+    LNK_params_s = [];
+    LNK_params_s.w_xs = nan;
+end
+if is_fitLNK_divnorm_rate_scw
+    r_hat_d_corr = corr(exp(:), r_hat_d(:));
+    LNK_params_d = prm_d;
+else
+    r_hat_d_corr = nan; 
+    LNK_params_d = [];
+    LNK_params_d.w_xs = nan;
+end
+if is_fitLNK_rate_scw
+    r_hat_w_corr = corr(exp(:), r_hat_w(:));
+    LNK_params_w = prm_w;
+else
+    r_hat_w_corr = nan;
+    LNK_params_w = [];
+    LNK_params_w.w_xs = nan;
+end
+PredictionResults( 3:end) = [corr(exp(:), r_hat(:))   r_hat_s_corr,...
                            corr(exp(:), sim_nl(:))  corr(exp(:), sim_s(:)),...
-                           corr(exp(:), r_hat_w(:)) corr(exp(:), sim(:)),...
-                           corr(exp(:), sim_nl_s(:))];
+                           r_hat_w_corr  corr(exp(:), sim(:)),...
+                           corr(exp(:), sim_nl_s(:)), r_hat_d_corr];
 LNK_params = prm;
-LNK_params_s = prm_s;
-LNK_params_w = prm_w;
+
+
+
 
 %%
 keyboard;
@@ -180,10 +208,10 @@ for i = 1:2
 
     save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-        'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params');
+        'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
-all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs];
+all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs LN_params_s.gamma];
 %%
 % mean(PredictionResults(:, 1, :), [1 3])
 % mean(PredictionResults(:, 2, :), [1 3])

@@ -39,9 +39,9 @@ end
 clear Data 
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
-Cdat = nan(num_set, 8);
+Cdat = nan(num_set, 9);
 Cbas = nan(num_set, 1);
-Csw = nan(num_set, 2);
+Csw = nan(num_set, 3);
 % Add LNK_params array to collect parameters
 LNK_params_array = nan(num_set, 10); % 10 columns for the specified parameters
 implement_case_id = 6;
@@ -50,23 +50,25 @@ for i = 1:num_set
     Data{i} = load(fullfile(folder_name, file_name));
     if is_show_fitted
         file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
-        loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w');
+        loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults', 'BaselineCorr', 'LNK_params_s', 'LNK_params_w', 'LN_params_s');
         Cdat(i, :) = loaded_data.PredictionResults;
         Cbas(i, :) = loaded_data.BaselineCorr;
-        Csw(i, 1:2) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs];
+        Csw(i, :) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs loaded_data.LN_params_s.gamma];
         
         % Collect LNK_params_w parameters in specified order
         % Order: 'tau', 'alpha_d', 'theta', 'sigma0', 'alpha', 'beta', 'b_out', 'g_out', 'w_xs', 'dt'
-        LNK_params_array(i, 1) = loaded_data.LNK_params_w.tau;
-        LNK_params_array(i, 2) = loaded_data.LNK_params_w.alpha_d;
-        LNK_params_array(i, 3) = loaded_data.LNK_params_w.theta;
-        LNK_params_array(i, 4) = loaded_data.LNK_params_w.sigma0;
-        LNK_params_array(i, 5) = loaded_data.LNK_params_w.alpha;
-        LNK_params_array(i, 6) = loaded_data.LNK_params_w.beta;
-        LNK_params_array(i, 7) = loaded_data.LNK_params_w.b_out;
-        LNK_params_array(i, 8) = loaded_data.LNK_params_w.g_out;
-        LNK_params_array(i, 9) = loaded_data.LNK_params_w.w_xs;
+        LNK_params_array(i, 1) = getfield_safe(loaded_data.LNK_params_w, 'tau');
+        LNK_params_array(i, 2) = getfield_safe(loaded_data.LNK_params_w, 'alpha_d');
+        LNK_params_array(i, 3) = getfield_safe(loaded_data.LNK_params_w, 'theta');
+        LNK_params_array(i, 4) = getfield_safe(loaded_data.LNK_params_w, 'sigma0');
+        LNK_params_array(i, 5) = getfield_safe(loaded_data.LNK_params_w, 'alpha');
+        LNK_params_array(i, 6) = getfield_safe(loaded_data.LNK_params_w, 'beta');
+        LNK_params_array(i, 7) = getfield_safe(loaded_data.LNK_params_w, 'b_out');
+        LNK_params_array(i, 8) = getfield_safe(loaded_data.LNK_params_w, 'g_out');
+        LNK_params_array(i, 9) = getfield_safe(loaded_data.LNK_params_w, 'w_xs');
         LNK_params_array(i, 10) = 0.01; % dt default value
+        % Helper function to safely get field or assign NaN
+        
     end
 end
 
@@ -230,7 +232,7 @@ if is_show_fitted
         
         group_cbas = Cbas(group_mask);
         group_cdat_ln = Cdat(group_mask, 5);    % 5th column: LN
-        group_cdat_lnk = Cdat(group_mask, 7);   % 7th column: LNK
+        group_cdat_lnk = Cdat(group_mask, 9);   % 9th column: LNK
 
         % Sort by Cbas in descending order
         [sorted_cbas, sort_idx] = sort(group_cbas, 'descend');
@@ -275,8 +277,8 @@ if is_show_fitted
         temporal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 1);
         nasal_mask = (cell_type_numeric == (ct==1)) & (location_type_numeric == 0);
         
-        temporal_csw = Csw(temporal_mask, 2);
-        nasal_csw = Csw(nasal_mask, 2);
+        temporal_csw = Csw(temporal_mask, 3);
+        nasal_csw = Csw(nasal_mask, 3);
         
         % Remove outliers using interquartile range method
         if length(temporal_csw) > 0
@@ -685,5 +687,13 @@ for typeIdx = 1:2
             print(gcf, save_file_name, '-dpng', '-r300');
 
         end
+    end
+end
+
+function val = getfield_safe(s, fname)
+    if isfield(s, fname)
+        val = s.(fname);
+    else
+        val = nan;
     end
 end
