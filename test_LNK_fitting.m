@@ -90,8 +90,15 @@ end
 [~, bestblk] = max(lnk_corr_temp_w);
 prm_w = prm_temp{bestblk};
 r_hat_w = r_hat_temp_w(bestblk, :);
+%%
+is_save_lnk = 0;
+if is_save_lnk
+    save_lnk_file_name = sprintf('%s_for_lnk_verification.mat', recording_name);
+    save_lnk_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\lnk_verification';
+    save(fullfile(save_lnk_folder, save_lnk_file_name), 'sim', 'sim_s', 'exp', ...
+        'r_hat', 'prm', 'r_hat_s', 'prm_s', 'r_hat_w', 'prm_w');
+end
 
-keyboard;
 %%
 if is_plot
     x_lim_range = [28 52];

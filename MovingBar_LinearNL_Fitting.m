@@ -121,12 +121,17 @@ exp(isnan(exp)) = 0;
 
 test_LNK_fitting
 [sim_nl, LN_params] = fit_linear_transform(sim*1e6, exp);
+[sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
 PredictionResults( 3:end) = [corr(exp(:), r_hat(:))   corr(exp(:), r_hat_s(:)),...
                            corr(exp(:), sim_nl(:))  corr(exp(:), sim_s(:)),...
-                           corr(exp(:), r_hat_w(:)) corr(exp(:), sim(:))];
+                           corr(exp(:), r_hat_w(:)) corr(exp(:), sim(:)),...
+                           corr(exp(:), sim_nl_s(:))];
 LNK_params = prm;
 LNK_params_s = prm_s;
 LNK_params_w = prm_w;
+
+%%
+keyboard;
 
 %%
 csim = sim;
