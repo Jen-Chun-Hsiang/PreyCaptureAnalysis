@@ -1,10 +1,11 @@
 num_lnk_test = 10;
 lnk_corr_temp = nan(num_lnk_test, 1);
+factor_scaling = 1e8;
 clear prm_temp
 tic
 for lnk = 1:num_lnk_test
     fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-    [prm, r_hat, a_hat, fval] = fitLNK_rate(sim(:)*1e6, exp(:), 0.01, ...
+    [prm, r_hat, a_hat, fval] = fitLNK_rate(sim(:)*factor_scaling, exp(:), 0.01, ...
         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
     if lnk == 1
         r_hat_temp = nan(num_lnk_test, length(r_hat));
@@ -23,7 +24,7 @@ lnk_corr_temp_s = nan(num_lnk_test, 1);
 tic
 for lnk = 1:num_lnk_test
     fprintf('Fitting LNK model %d/%d... %.2f s\n', lnk, num_lnk_test, toc);
-    [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
+    [prm_s, r_hat_s, a_hat, fval] = fitLNK_rate_two(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500);
     if lnk == 1
         r_hat_temp_s = nan(num_lnk_test, length(r_hat_s));
@@ -75,7 +76,7 @@ for lnk = 1:num_lnk_test
         end
     end
     
-    [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*1e6, sim_s(:)*1e6, exp(:), 0.01, ...
+    [prm_w, r_hat_w, a_hat, fval] = fitLNK_rate_scw(sim(:)*factor_scaling, sim_s(:)*factor_scaling, exp(:), 0.01, ...
         'OutputNL','softplus', 'Robust','huber', 'Delta',1.0, 'MaxIter',500, ...
         'CSR', current_csr, 'CSRMetric', 'S_over_C', 'SurroundSign', -1, 'CSRStrength', CSRStrength);
     if lnk == 1
@@ -90,6 +91,7 @@ end
 prm_w = prm_temp{bestblk};
 r_hat_w = r_hat_temp_w(bestblk, :);
 
+keyboard;
 %%
 if is_plot
     x_lim_range = [28 52];
