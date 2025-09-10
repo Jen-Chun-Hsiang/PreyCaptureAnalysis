@@ -39,7 +39,7 @@ sim = [];
 exp = [];
 sim_s = [];
 num_repeat = size(Data, 5);
-q_ids = 1:3; % contrast
+q_ids = 1:1; % contrast
 bw_ids = 1:5; % barwidth
 sp_ids = 1:5; % speed
 for k = 1:num_repeat
@@ -127,10 +127,12 @@ test_LNK_fitting
 [sim_nl, LN_params] = fit_linear_transform(sim*1e6, exp);
 % Check if CSR values are available and pass them to the fitting function
 if exist('CSR_value', 'var') && exist('CSRStrength', 'var')
+    disp('Fitting with CSR constraint...');
     [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6, 'CSR_value', CSR_value, 'CSRStrength', CSRStrength);
 else
     [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
 end
+
 if is_fitLNK_rate_two
     r_hat_s_corr = corr(exp(:), r_hat_s(:));
     LNK_params_s = prm_s;
