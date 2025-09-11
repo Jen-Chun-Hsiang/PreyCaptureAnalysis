@@ -31,7 +31,7 @@ ON_Nasal_CSR = -0.006;
 ON_Temporal_CSR = -0.09;
 OFF_Nasal_CSR = -0.056;
 OFF_Temporal_CSR = -0.062;
-CSRStrength = 50;
+CSRStrength = 1000;
 %%
 count_csr_type = nan(num_recording, 1);
 %%

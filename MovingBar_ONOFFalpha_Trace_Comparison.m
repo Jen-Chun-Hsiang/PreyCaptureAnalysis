@@ -2,6 +2,9 @@ close all; clear; clc;
 %% Load processed data
 set_name = 'latest';  % before081425
 is_show_fitted = 1;
+
+% d101924 unlikely to be OFF temporal, responses is very quick to sustained parts
+
 switch set_name
      case 'before081425'
         data_sets = {'e100724', 'f100724', 'a101224', 'b101224', 'c101224',   'd101224', 'e101224',...

@@ -120,18 +120,33 @@ function out = estimate_surround_sigma(rvals, Rmean, Rsem, bigR, draws)
     end
     Rpk_star = polyval(p, rpk_star);
 
+    % Build ordered pairs of bigR (r1<r2)
     pairs = [];
     for i=1:numel(bigR)
         for j=1:numel(bigR)
-            if bigR(j) > bigR(i), pairs(end+1,:) = [bigR(i) bigR(j)]; end %#ok<AGROW>
+            if bigR(j) > bigR(i)
+                pairs(end+1,:) = [bigR(i) bigR(j)]; %#ok<AGROW>
+            end
         end
     end
 
+    % Maximum measurable sigma: conservative bound based on largest measured radius
+    % Theoretical maximum: sigma where exp(-rmax^2/2sigma^2) ≈ 0.1 (90% attenuation)
+    % This gives sigma ≈ rmax / sqrt(2*ln(10)) ≈ rmax / 2.15
+    max_meas_sigma = max(rvals);  % Conservative bound
+
+    % If the largest measured spot elicits >= peak response, surround not resolved
+    R_at_rmax = sample_R_at_radius(max(rvals), rvals, Rmean, Rsem);
+    if R_at_rmax >= 0.95 * Rpk_star  % Allow 5% tolerance for noise
+        out = struct('sigma_s', max_meas_sigma, 'ci68', [max_meas_sigma max_meas_sigma], ...
+                    'n_valid', 0, 'sigmas', [], 'note', 'Largest spot >= peak response; assigned max measurable sigma');
+        return
+    end
+
     sigmas = nan(draws*numel(pairs),1);
-    c = 0; n_valid = 0;
+    c = 0; n_valid = 0; n_clipped = 0;
 
     for t = 1:draws
-        % Optionally sample Rpk (here we keep deterministic Rpk_star; change if you have SEM at pk)
         Rpk = Rpk_star;
         for pidx = 1:size(pairs,1)
             r1 = pairs(pidx,1); r2 = pairs(pidx,2);
@@ -147,15 +162,25 @@ function out = estimate_surround_sigma(rvals, Rmean, Rsem, bigR, draws)
             end
             rho = (R1 - R2) / max(Rpk - R1, 1e-12);
 
-            c = c+1;
-            sigmas(c) = solve_sigma_surround(r1, r2, rho);
+            s = solve_sigma_surround(r1, r2, rho);
+            if isnan(s) || s <= 0
+                continue;
+            end
+            % Clamp to maximum measurable sigma
+            if s > max_meas_sigma
+                s = max_meas_sigma;
+                n_clipped = n_clipped + 1;
+            end
+
+            c = c + 1;
+            sigmas(c) = s;
             n_valid = n_valid + 1;
         end
     end
     sigmas = sigmas(1:c);
     if isempty(sigmas)
         out = struct('sigma_s', NaN, 'ci68', [NaN NaN], 'n_valid', 0, ...
-                    'sigmas', sigmas, 'note', 'No informative draws; try larger r2.');
+                    'sigmas', sigmas, 'note', 'No informative draws; try larger r2 or reduce clipping');
         return
     end
 
@@ -163,8 +188,13 @@ function out = estimate_surround_sigma(rvals, Rmean, Rsem, bigR, draws)
     lo  = quantile(sigmas, 0.16);
     hi  = quantile(sigmas, 0.84);
 
+    note_str = '';
+    if n_clipped > 0
+        note_str = sprintf('Clipped %d draws to max_meas_sigma=%.1f μm', n_clipped, max_meas_sigma);
+    end
+
     out = struct('sigma_s', med, 'ci68', [lo hi], 'n_valid', n_valid, ...
-                'sigmas', sigmas, 'note', '');
+                'sigmas', sigmas, 'note', note_str);
 end
 
 function R = sample_R_at_radius(r, rvals, Rmean, Rsem)
@@ -190,26 +220,66 @@ function sigma = solve_sigma_surround(r1, r2, rho, tol, maxit)
     if nargin < 5 || isempty(maxit), maxit = 200;  end
 
     r1 = double(r1); r2 = double(r2); rho = double(rho);
-    if r2 <= r1, error('Require r2 > r1.'); end
+    
+    % Input validation
+    if r2 <= r1
+        sigma = NaN;
+        return;
+    end
+    if rho <= 0
+        sigma = NaN;
+        return;
+    end
 
+    % Theoretical maximum rho for given r1, r2
     rho_max = (r2^2)/(r1^2) - 1.0;
-    rho = max(0.0, min(rho, rho_max));  % clip to feasible set
+    
+    % If rho is too large, clamp it or return reasonable bound
+    if rho >= rho_max
+        % Return a conservative large sigma (but not infinite)
+        sigma = r2 / 1.5;  % Conservative large sigma
+        return;
+    end
+    
+    rho = max(1e-12, min(rho, rho_max * 0.95));  % clip to feasible set with margin
 
     f = @(s) ((exp(-r1^2./(2*s.^2)) - exp(-r2^2./(2*s.^2))) ./ ...
             (1 - exp(-r1^2./(2*s.^2)) + 1e-12)) - rho;
 
-    lo = r1/6;        % generous lower bound
-    hi = 10*r2;       % generous upper bound
+    % More conservative bounds
+    lo = r1/10;       % smaller lower bound
+    hi = 3*r2;        % smaller upper bound (was 10*r2)
 
-    % If hi not high enough (rare), expand
-    while f(hi) < 0 && hi < 1e6*r2
-        hi = hi*2;
+    % Check if bounds are reasonable
+    if f(hi) < 0
+        % Function hasn't crossed zero by upper bound - return large sigma
+        sigma = hi;
+        return;
+    end
+    if f(lo) > 0
+        % Function already above target at lower bound - return small sigma
+        sigma = lo;
+        return;
     end
 
-    % Bisection
+    % Bisection with better error handling
     for k = 1:maxit
         mid = 0.5*(lo+hi);
-        fm  = f(mid);
+        
+        % Check for numerical issues
+        if ~isfinite(mid)
+            sigma = NaN;
+            return;
+        end
+        
+        fm = f(mid);
+        
+        % Check for numerical issues
+        if ~isfinite(fm)
+            sigma = NaN;
+            return;
+        end
+        
         if abs(fm) < tol || (hi-lo) < tol*max(1.0, mid)
             sigma = mid; 
             return

@@ -14,7 +14,7 @@ spatial_filter_center = spatial_filter_center / sum(abs(spatial_filter_center(:)
 
 switch lower(surround_sf_type)
     case 'fixed'
-        spatial_params(3:4) = spatial_params(3:4)*4;
+        spatial_params(3:4) = spatial_params(3:4)*8;  % 4
     case 'linearfit'
         spatial_params(3:4) = gauss_est(cell_idx, 8:9);
 end

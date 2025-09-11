@@ -14,7 +14,7 @@ clc; close all;
 % ================== CONFIGURATION ==================
 test_type = 'ON';  % 'ON' or 'OFF'
 draws = 2000;      % Number of bootstrap draws for RF estimation
-bigR = [400, 600, 800];  % Large radii for surround estimation (μm)
+bigR = [600, 800];  % Large radii for surround estimation (μm)
 
 % Save results folder
 save_folder = './Results/RF_Analysis/';

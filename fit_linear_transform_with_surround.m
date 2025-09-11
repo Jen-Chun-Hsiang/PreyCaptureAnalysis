@@ -40,7 +40,7 @@ function [sim_nl, LN_params] = fit_linear_transform_with_surround(sim, exp, sim_
     % Include CSR penalty term if CSR_value and CSRStrength are provided
     if ~isempty(CSR_value) && CSRStrength > 0
         cost_func = @(params) mean((max(params(1) * (sim_clean - params(3) * sim_s_clean) + params(2), 0) - exp_clean).^2) + ...
-                              CSRStrength * (params(3) - CSR_value)^2;
+                              CSRStrength * (params(3) + CSR_value)^2;
     else
         cost_func = @(params) mean((max(params(1) * (sim_clean - params(3) * sim_s_clean) + params(2), 0) - exp_clean).^2);
     end
