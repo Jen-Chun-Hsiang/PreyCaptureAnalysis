@@ -42,11 +42,18 @@ num_repeat = size(Data, 5);
 q_ids = 1:1; % contrast
 bw_ids = 1:5; % barwidth
 sp_ids = 1:5; % speed
+
+trial_table = nan(num_repeat*length(q_ids)*length(bw_ids)*length(sp_ids), 5);
+tid = 1;
+trail = [];
 for k = 1:num_repeat
     for q = q_ids
         iid = randperm(5);
         for i = bw_ids
             for j = sp_ids
+                trial_table(tid, :) = [q, iid(i), j, k, i];
+
+                
                 csim = squeeze(resp(q, iid(i), j, :));
                 csim_s = squeeze(resp_s(q, iid(i), j, :));
                 cexp = squeeze(Data(dr_id, q, iid(i), j, k, 1:length(csim)));
@@ -68,7 +75,8 @@ for k = 1:num_repeat
                     csim(snan_ids) = csim(snan_ids(1)-1);
                     csim_s(snan_ids) = csim_s(snan_ids(1)-1);
                 end
-
+                trail = [trail; tid*ones(length(csim), 1)];
+                tid = tid + 1;
                 sim = [sim; csim];
                 exp = [exp; cexp];
                 sim_s = [sim_s; csim_s];
@@ -132,6 +140,7 @@ if exist('CSR_value', 'var') && exist('CSRStrength', 'var')
 else
     [sim_nl_s, LN_params_s] = fit_linear_transform_with_surround(sim*1e6, exp, sim_s*1e6);
 end
+assert(length(sim_nl_s) == numel(trail));
 
 if is_fitLNK_rate_two
     r_hat_s_corr = corr(exp(:), r_hat_s(:));
@@ -210,10 +219,10 @@ if is_fitGainControl
         fprintf('progress... %d/%d, %d/%d %.2f s\n', ii, num_recording, i, 2, toc);
 
         %%
-
         save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
         save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-            'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d');
+            'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d', 'sim_nl_s',...
+            'trail', 'trial_table');
     end
 else
     % If gain control fitting is disabled, set default values for gain control indices
@@ -226,7 +235,8 @@ else
     
     save_file_name = sprintf('%s_moving_bar_fitted.mat', recording_name);
     save(sprintf('./Results/MovingBar/%s', save_file_name), 'PredictionResults', 'PredTraces',...
-        'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d');
+        'BaselineCorr', 'LNK_params', 'LNK_params_s', 'LNK_params_w', 'LN_params', 'LN_params_s', 'LNK_params_d', 'sim_nl_s',...
+        'trail', 'trial_table');
 end
 all_corr(ii, :) = [PredictionResults(1, :) BaselineCorr(1)];
 all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs LN_params_s.gamma LNK_params_d.w_xs];
