@@ -39,7 +39,7 @@ save_fig_folder = './Figures/MovingBarSummary/';
 if ~exist(save_fig_folder, 'dir')
     mkdir(save_fig_folder);
 end
-clear Data 
+clear Data FitD
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingBar';
 Cdat = nan(num_set, 10);
@@ -54,11 +54,14 @@ for i = 1:num_set
     if is_show_fitted
         file_name = sprintf('%s_moving_bar_fitted.mat', data_sets{i});
         loaded_data = load(sprintf('./Results/MovingBar/%s', file_name), 'PredictionResults',...
-         'BaselineCorr', 'LNK_params_s', 'LNK_params_w', 'LN_params_s', 'LNK_params_d');
+         'BaselineCorr', 'LNK_params_s', 'LNK_params_w', 'LN_params_s', 'LNK_params_d', 'sim_nl_s', 'trail', 'trial_table');
         Cdat(i, :) = loaded_data.PredictionResults;
         Cbas(i, :) = loaded_data.BaselineCorr;
         Csw(i, :) = [loaded_data.LNK_params_s.w_xs loaded_data.LNK_params_w.w_xs,...
                      loaded_data.LN_params_s.gamma loaded_data.LNK_params_d.w_xs];
+        FitD{i}.sim_nl_s = loaded_data.sim_nl_s;
+        FitD{i}.trail = loaded_data.trail;
+        FitD{i}.trial_table = loaded_data.trial_table;
 
         % Collect LNK_params_w parameters in specified order
         % Order: 'tau', 'alpha_d', 'theta', 'sigma0', 'alpha', 'beta', 'b_out', 'g_out', 'w_xs', 'dt'
@@ -76,6 +79,16 @@ for i = 1:num_set
         
     end
 end
+%% check FitD.trail and FitD.trial_table consistency
+check_ids = randperm(num_set, 3)
+% assert(numel(FitD{check_ids(1)}.trail) == numel(FitD{check_ids(2)}.trail));
+assert(sum(FitD{check_ids(1)}.trial_table - FitD{check_ids(3)}.trial_table, 'all') == 0);
+% assert(sum(FitD{check_ids(2)}.trial - FitD{check_ids(3)}.trial, 'all') == 0);
+
+
+%%
+keyboard;
+
 
 %% Load fitted parameters from White Noise for LN model
 process_version = 'GaussianFitting_processed_082025_1.mat';
@@ -249,7 +262,7 @@ if is_show_fitted
         % Plot lines
         plot(x_vals, sorted_cbas, 'k-', 'LineWidth', 2, 'DisplayName', 'Repeat reliability');
         plot(x_vals, sorted_cdat_ln, 'b-', 'LineWidth', 2, 'DisplayName', 'LN');
-        plot(x_vals, sorted_cdat_lnk, 'r-', 'LineWidth', 2, 'DisplayName', 'LNK');
+        plot(x_vals, sorted_cdat_lnk, 'r-', 'LineWidth', 2, 'DisplayName', 'LN_s');
         
         xlabel('Cell (sorted by repeat reliability)');
         ylabel('Correlation coefficient');
@@ -257,8 +270,11 @@ if is_show_fitted
         xticks(1:2:length(sorted_cbas));
         xticklabels(arrayfun(@num2str, 1:2:length(sorted_cbas), 'UniformOutput', false));
         yticks(0:0.25:1);
-        yticklabels(arrayfun(@num2str, 0:0.25:1, 'UniformOutput', false));
+        yticklabels({'0', '', '0.5', '', '1'});
         ylim([0 1]);
+        xlim([1 length(sorted_cbas)]);
+        xticks(1:2:length(sorted_cbas));
+        xticklabels(arrayfun(@num2str, 1:2:length(sorted_cbas), 'UniformOutput', false));
         legend('Location', 'best');
         grid off;
     end
@@ -521,8 +537,8 @@ if is_show_fitted
 end
 %% ON & OFF comparison
 Fz = 100;
-disp_direction = 180;
-disp_contrast = 0.33;
+disp_direction = 0;
+disp_contrast = 0;
 disp_bar_witdth = [50, 100, 200, 400, 800];
 disp_speeds = [500, 1000, 2000, 4000, 8000];
 max_t = 459;
@@ -563,7 +579,7 @@ end
 
 %% within type Comparison
 Fz = 100;
-disp_direction = 180;
+disp_direction = 0;
 disp_contrast = 0;
 disp_bar_witdth = [50, 100, 200, 400, 800];  % [50, 100, 200, 400, 800]
 disp_speeds = [500, 1000, 2000, 4000, 8000]; % [500, 1000, 2000, 4000, 8000]
@@ -615,10 +631,10 @@ end
 %% within type-location Comparison (4 figures: ON-Temporal, ON-Nasal, OFF-Temporal, OFF-Nasal)
 save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
 Fz = 100;
-disp_direction = 180;
+disp_direction = 0;
 disp_contrast = 0;
-disp_bar_witdth = [100];  % [50, 100, 200, 400, 800]
-disp_speeds = [500, 8000]; % [500, 1000, 2000, 4000, 8000]
+disp_bar_witdth = [800];  % [50, 100, 200, 400, 800]
+disp_speeds = [1000 8000]; % [500, 1000, 2000, 4000, 8000]
 max_t = 459;
 
 ct = (0:max_t-1)/Fz;
@@ -649,11 +665,12 @@ for typeIdx = 1:2
 
         for i = 1:length(disp_contrast)
             Trace = nan(length(disp_bar_witdth), length(disp_speeds), num_set, max_t);
+            Trace_s = nan(length(disp_bar_witdth), length(disp_speeds), num_set, max_t);
             figure('Name', sprintf('%s-%s', Disp_Type, Disp_Location)); % Separate figure for each group
             
             for j = 1:length(disp_bar_witdth)
                 for q = 1:length(disp_speeds)
-                    subplot(length(disp_bar_witdth), length(disp_speeds), (j-1)*length(disp_speeds)+q); hold on
+                    subplot(length(disp_speeds), length(disp_bar_witdth), (q-1)*length(disp_bar_witdth)+j); hold on
                     gids_idx = find(gids);
                     for idx = 1:length(gids_idx)
                         k = gids_idx(idx);
@@ -662,11 +679,42 @@ for typeIdx = 1:2
                         bw_id = find(Data{k}.dim3_bar_width == disp_bar_witdth(j));
                         sp_id = find(Data{k}.dim4_speeds == disp_speeds(q));
                         csig = squeeze(mean(Data{k}.Data(dir_id, ctr_id, bw_id, sp_id, :, :), 5));
+                        csim_tab  = getfield_safe(FitD{k}, 'trial_table');
+                        if ~isnan(csim_tab)
+                            sim =  FitD{k}.sim_nl_s;
+                            ctrail = FitD{k}.trail;
+                            tids = find(csim_tab(:,1)==ctr_id & csim_tab(:,2)==bw_id & csim_tab(:,3)==sp_id);
+                            clear csim_c csim
+                            csim_c = cell(1, length(tids)); 
+                            for  tt = 1:length(tids)
+                                tid = tids(tt);
+                                csim_c{tt} = sim(ctrail == tid);
+                            end
+                            temp_Ls = max(cellfun(@(x) length(x), csim_c));
+                            csim = nan(length(tids), temp_Ls);
+                            for tt = 1:length(tids)
+                                csim(tt, 1:length(csim_c{tt})) = csim_c{tt};
+                            end
+                            csim = mean(csim, 1);
+                            if length(csim) < max_t
+                                csim = [csim, nan(1, max_t-length(csim))];
+                            end
+                            Trace_s(j, q, k, :) = csim(1:max_t);
+                            
+                        end
+
+                        
                         Trace(j, q, k, :) = csig(1:max_t);
-                        plot(ct, csig(1:max_t), 'Color', 0.5*ones(1, 3));
+                        % plot(ct, csig(1:max_t), 'Color', 0.5*ones(1, 3));
                     end
                     % Plot group mean
-                    plot(ct, squeeze(mean(Trace(j, q, gids, :), 3)), 'Color', color_this_group, 'LineWidth', 2)
+                    mean_trace = squeeze(mean(Trace(j, q, gids, :), 3));
+                    sem_trace = squeeze(std(Trace(j, q, gids, :), 0, 3)) / sqrt(sum(gids));
+                    mean_trace_s = squeeze(mean(Trace_s(j, q, gids, :), 3));
+                    sem_trace_s = squeeze(std(Trace_s(j, q, gids, :), 0, 3)) / sqrt(sum(gids));
+                    % Plot shaded error bars for mean ± SEM
+                    shadePlot(ct, mean_trace, sem_trace,  color_this_group);
+                    shadePlot(ct, mean_trace_s, sem_trace_s, 'k');
                     ylim([0 250]);
                     yticks(0:50:200);
                     yticklabels({'0', '', '100', '', '200'});
@@ -675,8 +723,12 @@ for typeIdx = 1:2
                             xlim([ct(1) 3.18]);
                             xticks(0:1:3);  
                             xticklabels({'0',  '1', '2',  '3'});
+                        case 1000
+                            xlim([ct(1) 2.77]);
+                            xticks(0:1:2);  
+                            xticklabels({'0',  '1', '2'});
                         case 8000
-                            xlim([ct(1) 1.13]);
+                            xlim([ct(1) 1.2]);
                             xticks(0:0.4:1.2);  
                             xticklabels({'0',  '0.4', '0.8',  '1.2'});
                     end
