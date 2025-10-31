@@ -45,6 +45,7 @@ sp_ids = 1:5; % speed
 
 trial_table = nan(num_repeat*length(q_ids)*length(bw_ids)*length(sp_ids), 5);
 tid = 1;
+rpids = [];
 trail = [];
 for k = 1:num_repeat
     for q = q_ids
@@ -76,6 +77,7 @@ for k = 1:num_repeat
                     csim_s(snan_ids) = csim_s(snan_ids(1)-1);
                 end
                 trail = [trail; tid*ones(length(csim), 1)];
+                rpids = [rpids; k*ones(length(cexp), 1)];
                 tid = tid + 1;
                 sim = [sim; csim];
                 exp = [exp; cexp];
@@ -88,13 +90,30 @@ ct = (0:length(sim)-1)/Fz;
 contrast_name = 'std';
 
 %% 
-[repeat_id1, repeat_id2] = randomSplit(num_repeat);
-x = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id1, :), 5);
-y = mean(Data(dr_id, q_ids, bw_ids, sp_ids, repeat_id2, :), 5);
-rmids = isnan(x) | isnan(y);
-x(rmids) = [];
-y(rmids) = [];
-BaselineCorr = corr(x(:), y(:));
+[repeat_data] = Data(dr_id, q_ids, bw_ids, sp_ids, :, :);
+if num_repeat < 2
+    BaselineCorr = NaN;
+else
+    repeat_data = reshape(repeat_data, [], num_repeat, size(repeat_data, 6));
+    repeat_data = permute(repeat_data, [2 1 3]);
+    repeat_data = reshape(repeat_data, num_repeat, []);
+    num_pairs = nchoosek(num_repeat, 2);
+    pair_corrs = nan(num_pairs, 1);
+    pair_idx = 1;
+    for r1 = 1:(num_repeat-1)
+        x = repeat_data(r1, :)';
+        for r2 = (r1+1):num_repeat
+            y = repeat_data(r2, :)';
+            valid = ~isnan(x) & ~isnan(y);
+            if any(valid)
+                pair_corrs(pair_idx) = corr(x(valid), y(valid));
+            end
+            pair_idx = pair_idx + 1;
+        end
+    end
+    BaselineCorr = mean(pair_corrs, 'omitnan');
+end
+
 %%
 close all
 figure;
@@ -143,7 +162,7 @@ end
 assert(length(sim_nl_s) == numel(trail));
 
 if is_fitLNK_rate_two
-    r_hat_s_corr = corr(exp(:), r_hat_s(:));
+    r_hat_s_corr = repeatcorr(exp(:), r_hat_s(:), rpids(:));
     LNK_params_s = prm_s;
 else
     r_hat_s_corr = nan; 
@@ -151,7 +170,7 @@ else
     LNK_params_s.w_xs = nan;
 end
 if is_fitLNK_divnorm_rate_scw
-    r_hat_d_corr = corr(exp(:), r_hat_d(:));
+    r_hat_d_corr = repeatcorr(exp(:), r_hat_d(:), rpids(:));
     LNK_params_d = prm_d;
 else
     r_hat_d_corr = nan; 
@@ -159,17 +178,17 @@ else
     LNK_params_d.w_xs = nan;
 end
 if is_fitLNK_rate_scw
-    r_hat_w_corr = corr(exp(:), r_hat_w(:));
+    r_hat_w_corr = repeatcorr(exp(:), r_hat_w(:), rpids(:));
     LNK_params_w = prm_w;
 else
     r_hat_w_corr = nan;
     LNK_params_w = [];
     LNK_params_w.w_xs = nan;
 end
-PredictionResults( 3:end) = [corr(exp(:), r_hat(:))   r_hat_s_corr,...
-                           corr(exp(:), sim_nl(:))  corr(exp(:), sim_s(:)),...
-                           r_hat_w_corr  corr(exp(:), sim(:)),...
-                           corr(exp(:), sim_nl_s(:)), r_hat_d_corr];
+PredictionResults( 3:end) = [repeatcorr(exp(:), r_hat(:), rpids(:))   r_hat_s_corr,...
+                           repeatcorr(exp(:), sim_nl(:), rpids(:))  repeatcorr(exp(:), sim_s(:), rpids(:)),...
+                           r_hat_w_corr  repeatcorr(exp(:), sim(:), rpids(:)),...
+                           repeatcorr(exp(:), sim_nl_s(:), rpids(:)), r_hat_d_corr];
 LNK_params = prm;
 
 
@@ -206,7 +225,7 @@ if is_fitGainControl
         y = max([gain_control_system_opt([gain_params(1:2) OptW(1:4)], csim).*OptW(5)+OptW(6);
             zeros(1, length(csim))], [], 1);
         ct = (0:length(sim)-1)/Fz;
-        PredictionResults(i) = corr(exp(:), y(:));
+        PredictionResults(i) = repeatcorr(exp(:), y(:), rpids(:));
         PredTraces{i, 1} = exp(:);
         PredTraces{i, 2} = y(:);
         figure; hold on
@@ -246,3 +265,37 @@ all_SC(ii, :) = [LNK_params_s.w_xs LNK_params_w.w_xs LN_params_s.gamma LNK_param
 %%
 % mean(PredictionResults(:, :, 1), [1 2])
 % mean(PredictionResults(:, :, 2), [1 2])
+
+
+function c = repeatcorr(x, y, repeat_ids)
+%REPEATCORR Correlation averaged across repeats identified by repeat_ids.
+%   c = REPEATCORR(x, y, repeat_ids) returns the mean Pearson correlation
+%   between vectors x and y computed separately for each unique repeat
+%   index in repeat_ids. NaN entries are ignored on a per-repeat basis and
+%   repeats with fewer than two valid samples are skipped. The returned
+%   value is the mean of the per-repeat correlations, omitting NaNs.
+
+    if ~isequal(numel(x), numel(y), numel(repeat_ids))
+        error('repeatcorr:InputSizeMismatch', ...
+            'Inputs x, y, and repeat_ids must have the same number of elements.');
+    end
+
+    x = x(:);
+    y = y(:);
+    repeat_ids = repeat_ids(:);
+
+    uids = unique(repeat_ids(~isnan(repeat_ids)));
+    per_repeat = nan(numel(uids), 1);
+
+    for idx = 1:numel(uids)
+        mask = repeat_ids == uids(idx);
+        xv = x(mask);
+        yv = y(mask);
+        valid = ~isnan(xv) & ~isnan(yv);
+        if nnz(valid) > 1
+            per_repeat(idx) = corr(xv(valid), yv(valid));
+        end
+    end
+
+    c = mean(per_repeat, 'omitnan');
+end

@@ -281,7 +281,7 @@ if is_show_fitted
     sgtitle('Model Performance: LN vs LNK vs Repeat Reliability');
 
     saveas(gcf, fullfile(save_fig_folder, 'Model-Performance-LN-LNK.png'));
-    print(gcf, fullfile(save_fig_folder, 'Model-Performance-LN-LNK'), '-depsc', '-painters');
+    print(gcf, fullfile(save_fig_folder, 'Model-Performance-LN-LNK'), '-depsc', '-vector');
 
     % Figure for Csw (bar chart) - 2 subplots for ON/OFF with 2 bars each (Temporal vs Nasal averages)
     figure('Name', 'Subunit Weights (Csw)');
