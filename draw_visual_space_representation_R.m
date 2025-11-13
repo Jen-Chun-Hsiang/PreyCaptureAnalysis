@@ -8,7 +8,9 @@
 %   x = elevation (lambda) in radians: -π/2 to +π/2 (-90° to +90°)
 %   y = azimuth (phi) in radians: -π to +π (-180° to +180°)
 
-dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test04\data.mat';
+dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test06\data.mat';
+
+
 
 % DIAGNOSTIC: Inspect data ranges and distribution
 S = load(dataFile);
@@ -19,6 +21,117 @@ fprintf('y (azimuth) range: [%.4f, %.4f] rad = [%.1f°, %.1f°]\n', ...
     min(S.y), max(S.y), rad2deg(min(S.y)), rad2deg(max(S.y)));
 fprintf('Number of points: %d\n', length(S.x));
 
+%%
+clc; close all;
+x = S.x; y = S.y/2;
+shift_x = (max(x) + min(x))/2;
+x = (x-shift_x)*pi/range(x);
+X = x(:);Y = y(:);
+
+% x = (-90:10:0).*(pi/180);   % fixed azimuth
+% y = (-90:10:90).*(pi/180);               % elevations
+% [X, Y] = meshgrid(x, y);
+% X = X(:);Y = Y(:);
+figure; subplot(2,2,1);
+scatter(X, Y, 15, 'filled', 'MarkerFaceAlpha', 0.5);
+xlabel('y (azimuth)'); ylabel('x (elevation)');
+subplot(2,2,2);
+rho = acos( cos(Y) .* cos(X) );
+Xt = cos(Y) .* sin(X);
+Yt = sin(Y);
+theta = atan2(Yt, Xt);
+% polarplot(theta, rho);
+polarscatter(theta, rho,  15 , 'filled');
+
+nbins = 15;
+
+xedges = linspace(min(X), max(X), nbins+1);
+yedges = linspace(min(Y), max(Y), nbins+1);
+
+[N, xedges, yedges] = histcounts2(X, Y, xedges, yedges);
+
+% Bin centers
+xc = (xedges(1:end-1) + xedges(2:end)) / 2;
+yc = (yedges(1:end-1) + yedges(2:end)) / 2;
+[AZgrid, ELgrid] = meshgrid(xc, yc);  % same coordinates as density N
+
+subplot(2,2,3);
+imagesc(xc, yc, N');      % note transpose so axes match
+set(gca, 'YDir', 'normal');
+hold on;
+contour(AZgrid, ELgrid, N', 6, 'k', 'LineWidth', 1); % 6 contour levels
+xlabel('azimuth (rad)');
+ylabel('elevation (rad)');
+title('Density contour in (az, el)');
+axis tight; axis equal; grid on;
+colorbar;
+
+% ---- Point projection (your original logic) ----
+rho_pts = acos( cos(Y) .* cos(X) );
+Xp = cos(Y) .* sin(X);
+Yp = sin(Y);
+theta_pts = atan2(Yp, Xp);
+
+% ---- Grid projection for the contour ----
+rho_grid = acos( cos(ELgrid) .* cos(AZgrid) );
+Xg = cos(ELgrid) .* sin(AZgrid);
+Yg = sin(ELgrid);
+theta_grid = atan2(Yg, Xg);
+
+% Convert polar (theta, rho) grid to Cartesian for plotting
+Xproj = rho_grid .* cos(theta_grid);
+Yproj = rho_grid .* sin(theta_grid);
+
+% Convert the point cloud too (for overlay)
+Xpts_proj = rho_pts .* cos(theta_pts);
+Ypts_proj = rho_pts .* sin(theta_pts);
+
+subplot(2,2,4);
+hold on;
+
+% Projected contour (same density N, now warped by projection)
+contour(Xproj, Yproj, N', 6, 'k', 'LineWidth', 1);  % same 6 levels
+
+% Projected scatter
+scatter(Xpts_proj, Ypts_proj, 15, 'filled', 'MarkerFaceAlpha', 0.4);
+
+% Make it look like a polar map
+axis equal;
+xlabel('x (polar)');
+ylabel('y (polar)');
+title('Projected contour in polar map');
+grid on;
+
+% Optional: draw outer circle if you like
+maxR = max(rho_pts(:));
+t = linspace(0, 2*pi, 400);
+plot(maxR*cos(t), maxR*sin(t), 'r--');
+%%
+keyboard
+%%
+% Calculate optimal R based on data extent
+% First project with a provisional R to determine actual extent
+opts_temp = struct('projection','lambert', 'angleUnit','rad', ...
+                   'centerPhi',0, 'centerLambda',0, ...
+                   'R',sqrt(2), ...
+                   'drawGrid',true, 'gridStepDeg',30, ...
+                   'markerSize', 8);
+[X_temp, Y_temp] = project_visual_field(S.x, S.y, opts_temp);
+max_radius = max(hypot(X_temp, Y_temp));
+
+% Now set R based on actual data extent
+opts = struct('projection','lambert', 'angleUnit','rad', ...
+              'centerPhi',0, 'centerLambda',0, ...
+              'R',max_radius, ...
+              'drawGrid',true, 'gridStepDeg',30, ...
+              'markerSize', 8);
+
+[X2D, Y2D] = project_visual_field(S.x, S.y, opts);
+figure; hold on; axis equal off
+th = linspace(0,2*pi,720); 
+plot(max_radius*cos(th), max_radius*sin(th), 'k-'); % disk boundary based on data extent
+scatter(X2D, Y2D, 12, 'filled');
+
 % Check if values look like they could be Cartesian (not angles)
 if max(abs(S.x)) < 0.1 && max(abs(S.y)) < 0.1
     warning('Values are very small (< 0.1). Are these mm coordinates, not angles?');
@@ -26,6 +139,7 @@ elseif max(abs(S.x)) > pi/2 || max(abs(S.y)) > pi
     warning('Values exceed expected angular ranges. Check coordinate system.');
 end
 
+keyboard
 % DIAGNOSTIC PLOTS: Compare different interpretations
 figure('Color','w', 'Position', [100 100 1400 500]);
 
