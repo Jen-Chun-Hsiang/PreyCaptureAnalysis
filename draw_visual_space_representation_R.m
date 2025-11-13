@@ -1,0 +1,285 @@
+%% 1) CIRCULAR VISUAL FIELD DISK - Azimuthal Projection centered at (0°, 0°)
+% For publication-quality visual field maps (like panels A₃/C₃):
+%   - Use Lambert azimuthal equal-area projection (area-preserving, best for density)
+%   - OR stereographic projection (conformal, preserves local shapes)
+%   - Centered at visual field origin (0° azimuth, 0° elevation)
+%
+% YOUR DATA FORMAT:
+%   x = elevation (lambda) in radians: -π/2 to +π/2 (-90° to +90°)
+%   y = azimuth (phi) in radians: -π to +π (-180° to +180°)
+
+dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test04\data.mat';
+
+% DIAGNOSTIC: Inspect data ranges and distribution
+S = load(dataFile);
+fprintf('=== DATA INSPECTION ===\n');
+fprintf('x (elevation) range: [%.4f, %.4f] rad = [%.1f°, %.1f°]\n', ...
+    min(S.x), max(S.x), rad2deg(min(S.x)), rad2deg(max(S.x)));
+fprintf('y (azimuth) range: [%.4f, %.4f] rad = [%.1f°, %.1f°]\n', ...
+    min(S.y), max(S.y), rad2deg(min(S.y)), rad2deg(max(S.y)));
+fprintf('Number of points: %d\n', length(S.x));
+
+% Check if values look like they could be Cartesian (not angles)
+if max(abs(S.x)) < 0.1 && max(abs(S.y)) < 0.1
+    warning('Values are very small (< 0.1). Are these mm coordinates, not angles?');
+elseif max(abs(S.x)) > pi/2 || max(abs(S.y)) > pi
+    warning('Values exceed expected angular ranges. Check coordinate system.');
+end
+
+% DIAGNOSTIC PLOTS: Compare different interpretations
+figure('Color','w', 'Position', [100 100 1400 500]);
+
+% Plot 1: Direct scatter (treating as Cartesian-like)
+subplot(1,3,1);
+scatter(S.y, S.x, 15, 'filled', 'MarkerFaceAlpha', 0.5);
+xlabel('y (azimuth)'); ylabel('x (elevation)');
+title('Raw Data (as-is)');
+axis equal; grid on;
+
+% Plot 2: Converted to degrees (assuming radians)
+subplot(1,3,2);
+scatter(rad2deg(S.y), rad2deg(S.x), 15, 'filled', 'MarkerFaceAlpha', 0.5);
+xlabel('Azimuth (degrees)'); ylabel('Elevation (degrees)');
+title('Interpreted as Radians → Degrees');
+axis equal; grid on;
+
+% Plot 3: Azimuthal projection
+subplot(1,3,3);
+opts = struct('projection','lambert', 'angleUnit','rad', ...
+              'centerPhi',0, 'centerLambda',0, ...
+              'R',sqrt(2), ...
+              'drawGrid',true, 'gridStepDeg',30, ...
+              'markerSize', 8);
+[X2D, Y2D] = plot_visual_field_from_mat_simple(dataFile, opts);
+title('Lambert Projection');
+
+% Print diagnostic info about projection
+fprintf('\n=== PROJECTION DIAGNOSTIC ===\n');
+fprintf('Projected radial distances: min=%.4f, max=%.4f, mean=%.4f\n', ...
+    min(hypot(X2D, Y2D)), max(hypot(X2D, Y2D)), mean(hypot(X2D, Y2D)));
+fprintf('Points near edge (r > 0.9*R): %d / %d (%.1f%%)\n', ...
+    sum(hypot(X2D, Y2D) > 0.9*sqrt(2)), length(X2D), ...
+    100*sum(hypot(X2D, Y2D) > 0.9*sqrt(2))/length(X2D));
+
+%%
+% 2) If you already have phi/lambda in workspace (vectors):
+phi = randn(100,1)*30;      % deg, example azimuths
+lambda = randn(100,1)*20;   % deg, example elevations
+[X2D, Y2D] = project_visual_field(phi, lambda, opts);  % and then plot as you wish
+figure; scatter(X2D, Y2D, 18, 'filled'); axis equal off;
+
+%%
+% Synthetic phi (azimuth) and lambda (elevation) data
+% Arrange points in a spherical grid: -60° to +60° azimuth, -45° to +45° elevation
+[phi_grid, lambda_grid] = meshgrid(-60:15:60, -45:15:45);
+
+% Flatten to vectors
+phi = phi_grid(:);
+lambda = lambda_grid(:);
+
+% Optional: save to a .mat file to mimic your R-exported data
+x = phi;
+y = lambda;
+save('synthetic_phi_lambda.mat', 'x', 'y');
+
+% Set up plotting options
+opts = struct( ...
+    'projection', 'lambert', ...
+    'angleUnit', 'deg', ...
+    'centerPhi', 0, ...
+    'centerLambda', 0, ...
+    'R', 1, ...
+    'drawGrid', true, ...
+    'gridStepDeg', 30 ...
+);
+
+% Call the plotting function
+[X2D, Y2D] = plot_visual_field_from_mat('synthetic_phi_lambda.mat', opts);
+
+%%
+
+function [X2D, Y2D] = plot_visual_field_from_mat(matFile, opts)
+% plot_visual_field_from_mat Load elevation/azimuth and create visual field map
+% For RETINOTOPIC MAPPING: projects visual angles onto 2D disk using spherical projection
+%
+% Inputs:
+%   matFile : string path to .mat file (with variables 'x' and 'y')
+%             x = elevation (lambda) in radians or degrees
+%             y = azimuth (phi) in radians or degrees
+%   opts    : struct with fields (all optional):
+%               .projection   : 'lambert' (equal-area, default) or 'stereo'
+%               .angleUnit    : 'rad' (default) or 'deg'
+%               .centerPhi    : center azimuth (default 0)
+%               .centerLambda : center elevation (default 0)
+%               .R            : disk radius (default 1)
+%               .drawGrid     : true/false (default true)
+%               .gridStepDeg  : spacing for grid (default 30)
+%               .markerSize   : default 18
+%               .markerColor  : default [0 0.45 0.74]
+%
+% Outputs:
+%   X2D, Y2D : projected 2D coordinates
+
+    S = load(matFile);
+    if ~isfield(S, 'x') || ~isfield(S, 'y')
+        error('Expected variables x and y in %s', matFile);
+    end
+    % YOUR DATA FORMAT: x = elevation, y = azimuth (both in radians)
+    lambda = S.x;    % elevation (latitude) in radians
+    phi = S.y;       % azimuth (longitude) in radians
+
+    if nargin < 2 || isempty(opts), opts = struct(); end
+    if ~isfield(opts, 'projection'),   opts.projection   = 'lambert'; end
+    if ~isfield(opts, 'angleUnit'),    opts.angleUnit    = 'deg'; end
+    if ~isfield(opts, 'centerPhi'),    opts.centerPhi    = 0; end
+    if ~isfield(opts, 'centerLambda'), opts.centerLambda = 0; end
+    if ~isfield(opts, 'R'),            opts.R            = 1; end
+    if ~isfield(opts, 'drawGrid'),     opts.drawGrid     = true; end
+    if ~isfield(opts, 'gridStepDeg'),  opts.gridStepDeg  = 30; end
+    if ~isfield(opts, 'markerSize'),   opts.markerSize   = 18; end
+    if ~isfield(opts, 'markerColor'),  opts.markerColor  = [0 0.45 0.74]; end
+
+    [X2D, Y2D] = project_visual_field(phi, lambda, opts);
+
+    % ---- Plot ----
+    figure('Color','w'); hold on;
+    % Disk boundary
+    th = linspace(0, 2*pi, 720);
+    plot(opts.R*cos(th), opts.R*sin(th), 'k-', 'LineWidth', 1.25);
+
+    % Optional grid (meridians/parallels)
+    if opts.drawGrid
+        draw_visual_field_grid(opts);
+    end
+
+    % Points
+    scatter(X2D, Y2D, opts.markerSize, 'filled', 'MarkerFaceColor', opts.markerColor, ...
+            'MarkerFaceAlpha', 0.7, 'MarkerEdgeColor', 'none');
+
+    axis equal; xlim(opts.R*[-1 1]); ylim(opts.R*[-1 1]);
+    set(gca, 'Visible', 'off');
+    title(sprintf('Visual Field (%s projection, center=(%g,%g) %s)', ...
+          opts.projection, opts.centerPhi, opts.centerLambda, opts.angleUnit), ...
+          'FontWeight','normal');
+end
+
+
+function [X2D, Y2D] = project_visual_field(phi, lambda, opts)
+% project_visual_field Project spherical points (phi, lambda) to a 2D disk.
+% phi      : azimuth (longitude)
+% lambda   : elevation (latitude)
+% opts     : same struct as above (angleUnit, projection, center, R)
+
+    % Units → radians
+    if strcmpi(opts.angleUnit, 'deg')
+        d2r = pi/180;
+        phi = phi * d2r;
+        lambda = lambda * d2r;
+        phi0 = opts.centerPhi * d2r;
+        lam0 = opts.centerLambda * d2r;
+    else
+        phi0 = opts.centerPhi;
+        lam0 = opts.centerLambda;
+    end
+
+    % Δφ relative to center (wrap to [-pi, pi] for numerical stability)
+    dphi = wrapToPi(phi - phi0);
+
+    % Great-circle angular distance from center:
+    % cosθ = sin(lam0) sin(λ) + cos(lam0) cos(λ) cos(Δφ)
+    cosTheta = sin(lam0).*sin(lambda) + cos(lam0).*cos(lambda).*cos(dphi);
+    cosTheta = min(max(cosTheta, -1), 1); % clamp
+    theta = acos(cosTheta);
+
+    % Bearing α from center to point (for disk angle)
+    % α = atan2( cos(λ)*sin(Δφ), cos(lam0)*sin(λ) - sin(lam0)*cos(λ)*cos(Δφ) )
+    alpha = atan2( cos(lambda).*sin(dphi), ...
+                   cos(lam0).*sin(lambda) - sin(lam0).*cos(lambda).*cos(dphi) );
+
+    % Radial mapping r(θ)
+    R = opts.R;
+    switch lower(opts.projection)
+        case 'lambert'     % Lambert azimuthal equal-area
+            r = R .* sqrt(2) .* sin(theta ./ 2);  % r = R * sqrt(2) * sin(θ/2)
+        case 'stereo'      % Stereographic
+            r = 2 .* R .* tan(theta ./ 2);        % r = 2R * tan(θ/2)
+        otherwise
+            error('Unknown projection "%s". Use ''lambert'' or ''stereo''.', opts.projection);
+    end
+
+    X2D = r .* cos(alpha);
+    Y2D = r .* sin(alpha);
+
+    % Clip tiny FP noise just outside disk
+    clip = hypot(X2D, Y2D) > (R + 1e-10);
+    X2D(clip) = X2D(clip) .* (R ./ hypot(X2D(clip), Y2D(clip)));
+    Y2D(clip) = Y2D(clip) .* (R ./ hypot(X2D(clip), Y2D(clip)));
+end
+
+
+function draw_visual_field_grid(opts)
+% draw_visual_field_grid Draw meridians/parallels onto the disk (visual aid).
+    R = opts.R;
+    step = opts.gridStepDeg;
+    th = linspace(0, 2*pi, 720);
+
+    % Light boundary (already drawn bold once)
+    plot(R*cos(th), R*sin(th), 'Color', 0.8*[1 1 1]);
+
+    % Concentric rings for zenith angle (every step degrees from center)
+    hold on;
+    for ang = step:step:(180 - step)
+        % For Lambert, r = R * sqrt(2) * sin(θ/2); For Stereo, r = 2R * tan(θ/2)
+        theta = deg2rad(ang);
+        switch lower(opts.projection)
+            case 'lambert'
+                r = R * sqrt(2) * sin(theta/2);
+            case 'stereo'
+                r = 2*R * tan(theta/2);
+                r = min(r, R); % cap to disk
+        end
+        if r < R - 1e-6
+            plot(r*cos(th), r*sin(th), '-', 'Color', 0.9*[1 1 1]);
+        end
+    end
+
+    % Spokes (meridians) every step degrees
+    for az = 0:step:(360-step)
+        a = deg2rad(az);
+        plot([0, R*cos(a)], [0, R*sin(a)], '-', 'Color', 0.9*[1 1 1]);
+    end
+end
+
+
+function ang = wrapToPi(ang)
+% wrapToPi Wrap angle in radians to [-pi, pi]
+    ang = mod(ang + pi, 2*pi) - pi;
+end
+
+
+function [X2D, Y2D] = plot_visual_field_from_mat_simple(matFile, opts)
+% Simplified version without creating new figure - for subplots
+    S = load(matFile);
+    lambda = S.x;    % elevation
+    phi = S.y;       % azimuth
+    
+    if ~isfield(opts, 'markerSize'), opts.markerSize = 18; end
+    if ~isfield(opts, 'markerColor'), opts.markerColor = [0 0.45 0.74]; end
+    
+    [X2D, Y2D] = project_visual_field(phi, lambda, opts);
+    
+    % Plot on current axes
+    hold on;
+    th = linspace(0, 2*pi, 720);
+    plot(opts.R*cos(th), opts.R*sin(th), 'k-', 'LineWidth', 1.25);
+    
+    if opts.drawGrid
+        draw_visual_field_grid(opts);
+    end
+    
+    scatter(X2D, Y2D, opts.markerSize, 'filled', 'MarkerFaceColor', opts.markerColor, ...
+            'MarkerFaceAlpha', 0.5, 'MarkerEdgeColor', 'none');
+    
+    axis equal; xlim(opts.R*[-1 1]); ylim(opts.R*[-1 1]);
+    set(gca, 'Visible', 'off');
+end
