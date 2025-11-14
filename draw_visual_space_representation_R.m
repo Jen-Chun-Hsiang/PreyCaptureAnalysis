@@ -106,8 +106,134 @@ grid on;
 maxR = max(rho_pts(:));
 t = linspace(0, 2*pi, 400);
 plot(maxR*cos(t), maxR*sin(t), 'r--');
+
+%%
+% X, Y are your azimuth/elevation in radians
+az = X(:);
+el = Y(:);
+points = [az, el];
+
+% Grid for KDE evaluation
+ngrid = 100;  % increase for smoother, decrease for speed
+az_lin = linspace(min(az), max(az), ngrid);
+el_lin = linspace(min(el), max(el), ngrid);
+[AZgrid, ELgrid] = meshgrid(az_lin, el_lin);
+gridPoints = [AZgrid(:), ELgrid(:)];
+
+% Adaptive KDE on (az, el)
+densityVals = adaptiveKDE(points, gridPoints);
+D = reshape(densityVals, size(AZgrid));   % D(i,j) corresponds to (AZgrid(i,j), ELgrid(i,j))
+
+figure;
+
+% 1) Scatter in (az, el) space
+subplot(1,3,1);
+scatter(az, el, 15, 'filled', 'MarkerFaceAlpha', 0.4);
+xlabel('azimuth (rad)');
+ylabel('elevation (rad)');
+title('Raw samples (az, el)');
+axis equal; grid on;
+
+% 2) Smooth KDE contour in (az, el) space
+subplot(1,3,2);
+contourf(AZgrid, ELgrid, D, 12, 'LineColor', 'none');  % filled smooth map
+hold on;
+contour(AZgrid, ELgrid, D, 8, 'k', 'LineWidth', 0.7);  % contour lines
+scatter(az, el, 8, 'k.', 'MarkerFaceAlpha', 0.2);      % optional: show points
+xlabel('azimuth (rad)');
+ylabel('elevation (rad)');
+title('Adaptive KDE in (az, el)');
+axis equal; grid on;
+colorbar;
+
+% 3) Project everything to polar (theta, rho)
+
+% --- Project points ---
+rho_pts = acos( cos(el) .* cos(az) );
+Xp = cos(el) .* sin(az);
+Yp = sin(el);
+theta_pts = atan2(Yp, Xp);
+
+% --- Project grid (same formula applied to grid) ---
+rho_grid = acos( cos(ELgrid) .* cos(AZgrid) );
+Xg = cos(ELgrid) .* sin(AZgrid);
+Yg = sin(ELgrid);
+theta_grid = atan2(Yg, Xg);
+
+% Convert to Cartesian for plotting (so we can contour on a regular axes)
+Xproj = rho_grid .* cos(theta_grid);
+Yproj = rho_grid .* sin(theta_grid);
+
+% And the projected points
+Xpts_proj = rho_pts .* cos(theta_pts);
+Ypts_proj = rho_pts .* sin(theta_pts);
+
+subplot(1,3,3);
+hold on;
+
+% Smooth contour map in polar projection
+contourf(Xproj, Yproj, D, 12, 'LineColor', 'none');
+contour(Xproj, Yproj, D, 8, 'k', 'LineWidth', 0.7);
+
+% Projected scatter on top
+scatter(Xpts_proj, Ypts_proj, 10, 'k.', 'MarkerFaceAlpha', 0.3);
+
+axis equal;
+xlabel('x (polar)');
+ylabel('y (polar)');
+title('Adaptive KDE contour in polar projection');
+grid on;
+colorbar;
+
 %%
 keyboard
+%%
+
+function densityVals = adaptiveKDE(points, evalPoints)
+% adaptiveKDE - Adaptive Gaussian KDE with Abramson's method
+%
+% points:     [n x 2] sample points (x,y)
+% evalPoints: [m x 2] evaluation points (x,y)
+% densityVals: [m x 1] density estimates
+
+    n = size(points, 1);
+    if n < 2
+        densityVals = zeros(size(evalPoints, 1), 1);
+        return;
+    end
+
+    sigmaBase = std(points, 0, 1);
+    sigmaBase(isnan(sigmaBase)) = 0;
+    rangeVals = max(points, [], 1) - min(points, [], 1);
+    zeroIdx = sigmaBase <= 0;
+    sigmaBase(zeroIdx) = rangeVals(zeroIdx) / max(sqrt(n), 1);
+    sigmaBase(sigmaBase <= 0) = max(rangeVals) * 0.01 + eps;
+
+    baseBandwidth = 1.06 .* sigmaBase .* n^(-1/6);
+    baseBandwidth(baseBandwidth <= 0) = eps;
+
+    pilot = mvksdensity(points, points, ...
+                        'Bandwidth', baseBandwidth, ...
+                        'Kernel', 'normal');
+    pilot = max(pilot, realmin);
+    geomMeanPilot = exp(mean(log(pilot)));
+    lambda = (pilot / geomMeanPilot) .^ (-0.5);
+
+    densityVals = zeros(size(evalPoints, 1), 1);
+    for i = 1:n
+        hi = baseBandwidth .* lambda(i);
+        hi(hi <= 0) = eps;
+        dx = (evalPoints(:, 1) - points(i, 1)) ./ hi(1);
+        dy = (evalPoints(:, 2) - points(i, 2)) ./ hi(2);
+        kernelVals = exp(-0.5 .* (dx.^2 + dy.^2)) ./ (2 * pi * hi(1) * hi(2));
+        densityVals = densityVals + kernelVals;
+    end
+
+    densityVals = densityVals / n;
+end
+
+
+
 %%
 % Calculate optimal R based on data extent
 % First project with a provisional R to determine actual extent
