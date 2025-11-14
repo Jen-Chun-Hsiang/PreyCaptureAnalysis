@@ -1,3 +1,4 @@
+clear; close all; clc;
 dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test07\data.mat';
 
 
@@ -6,12 +7,21 @@ dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test07\data.mat';
 S = load(dataFile);
 phi_data    = S.x;
 lambda_data = S.y;
+rim_type = 'actual'; % 'ideal' | 'actual'
 
-phi0  = 1.047198;
-theta = linspace(0, 2*pi, 400);
-phi_rim    = phi0 * ones(size(theta));   % latitude = phi0 everywhere
-lambda_rim = theta - pi;                 % or similar; longitude range choice
-
+switch rim_type
+    case 'actual'
+        phi0 = S.phi0;
+        phi_rim = S.phi(S.rim_idx);
+        lambda_rim = S.lambda(S.rim_idx);
+    case 'ideal'
+        phi0  = 1.047198;
+        theta = linspace(0, 2*pi, 400);
+        phi_rim    = phi0 * ones(size(theta));   % latitude = phi0 everywhere
+        lambda_rim = theta - pi;                 % or similar; longitude range choice
+    otherwise
+        error('Unknown rim_type "%s". Use "ideal" or "actual".', rim_type);
+end
 projection_reconstructedDataset(phi_data, lambda_data, ...
                                 phi_rim, lambda_rim, ...
                                 phi0, 'equidistant');
@@ -154,7 +164,7 @@ function projection_reconstructedDataset(phi_data, lambda_data, ...
     plot(xr, yr, 'k-', 'LineWidth', 1.5);
     % --- 3. Plot datapoints ---
     plot(xd, yd, 'o', ...
-        'MarkerSize', 6, ...
+        'MarkerSize', 2, ...
         'MarkerFaceColor', [0.2 0.4 1.0], ...
         'MarkerEdgeColor', 'k');
     xlim([-1.1, 1.1]);
