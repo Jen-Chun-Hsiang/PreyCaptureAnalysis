@@ -26,94 +26,50 @@ projection_reconstructedDataset(phi_data, lambda_data, ...
                                 phi_rim, lambda_rim, ...
                                 phi0, 'equidistant');
 
-function [x, y, rho] = sphere_spherical_to_polar_cart(phi, lambda, phi0, method)
+function [x, y, rho] = sphere_spherical_to_polar_cart(phi, lambda, preserve)
 % sphere_spherical_to_polar_cart
-% MATLAB analog of retistruct's sphere.spherical.to.polar.cart()
-% plus azimuthal.*() projections (south-polar aspect).
+% MATLAB analog of retistruct's sphere.spherical.to.polar.cart().
 %
 % Inputs
-%   phi    : latitude (radians), column or row vector
-%   lambda : longitude (radians), same size as phi
-%   phi0   : rim latitude (radians) – the retinal edge latitude
-%   method : 'equidistant' | 'equalarea' | 'conformal'
-%            (matches azimuthal.equidistant / equalarea / conformal)
+%   phi      : latitude (radians), column or row vector
+%   lambda   : longitude (radians), same size as phi
+%   preserve : 'latitude' (default) | 'area' | 'angle'
+%              also accepts synonyms:
+%                 equidistant -> latitude
+%                 equalarea  -> area
+%                 conformal / stereographic -> angle
 %
 % Outputs
-%   x, y   : Cartesian coordinates on the polar disc
-%   rho    : radial coordinate (before scaling to unit rim)
+%   x, y     : Cartesian coordinates on the polar disc (raw units)
+%   rho      : radial coordinate prior to any rim scaling
 %
-% All formulas use a unit sphere and *south-polar* aspect:
-%   - South pole → centre of disc
-%   - Rim at latitude phi0 → unit circle
+% Notes
+%   - Matches the south-polar aspect used in the Retistruct GUI.
+%   - No scaling is applied to force the rim to unit radius; Retistruct
+%     handles that later via rho.to.degrees()/phi.to.rho.
 
-    if nargin < 4
-        method = 'equidistant';  % Retistruct often uses equidistant
+    if nargin < 3 || isempty(preserve)
+        preserve = 'latitude';
     end
 
-    % Ensure column vectors
     phi    = phi(:);
     lambda = lambda(:);
 
-    % --- 1. Convert latitude to colatitude ψ from NORTH pole ---
-    % Standard spherical: ψ = 0 at north pole, π at south pole
-    psi = pi/2 - phi;        % ψ in [0, π]
-
-    % --- 2. Raw radial coordinate ρ_raw depending on projection ---
-    method = lower(method);
-    switch method
-        case 'equidistant'
-            % Azimuthal equidistant, centred on SOUTH pole
-            % Central angle from south pole: c = π - ψ
-            % ρ ∝ c
-            rho_raw = pi - psi;  % = π/2 + phi
-
-        case 'equalarea'
-            % Lambert azimuthal equal-area, south-polar aspect
-            % From Wikipedia / MathWorld in colatitude ψ (north-based):
-            %   R = 2 * cos(ψ/2) for centre at south pole. :contentReference[oaicite:1]{index=1}
-            rho_raw = 2 * cos(psi / 2);
-
-        case 'conformal'
-            % Stereographic / azimuthal conformal, south-polar aspect
-            % Central angle from south pole: c = π - ψ
-            % Stereographic radius for central angle c:
-            %   R = 2 * tan(c/2). :contentReference[oaicite:2]{index=2}
-            c       = pi - psi;
-            rho_raw = 2 * tan(c / 2);
-
+    preserve = lower(preserve);
+    switch preserve
+        case {'latitude', 'equidistant', 'lat'}
+            rho = pi/2 + phi;
+        case {'area', 'equalarea', 'pa'}
+            rho = sqrt(2 * (1 + sin(phi)));
+        case {'angle', 'conformal', 'stereographic'}
+            rho = sqrt(2 * (1 + sin(phi)) ./ max(1 - sin(phi), eps));
         otherwise
-            error('Unknown method "%s". Use equidistant | equalarea | conformal.', method);
+            error('Unknown projection preserve mode "%s".', preserve);
     end
 
-    % --- 3. Scale so that rim latitude phi0 → unit circle (ρ = 1) ---
-    psi0 = pi/2 - phi0;   % colatitude of rim
-
-    switch method
-        case 'equidistant'
-            rho0 = pi - psi0;              % = π/2 + phi0
-        case 'equalarea'
-            rho0 = 2 * cos(psi0 / 2);
-        case 'conformal'
-            c0   = pi - psi0;
-            rho0 = 2 * tan(c0 / 2);
-    end
-
-    scale = 1 / rho0;
-    rho   = scale * rho_raw;
-
-    % --- 4. Convert to Cartesian in polar plane ---
-    % Choice of angular convention: here we take
-    %   λ = 0 → +Y axis
-    %   λ increases counter-clockwise
-    % This is:
-    %   x = ρ * sin(λ)
-    %   y = ρ * cos(λ)
-    %
-    % If you find the plot rotated vs. the Retistruct GUI,
-    % you can swap sin/cos or flip signs later.
-    x = rho .* sin(lambda);
-    y = rho .* cos(lambda);
-
+    % Retistruct uses x = rho*cos(lambda), y = rho*sin(lambda)
+    x = rho .* cos(lambda);
+    y = rho .* sin(lambda);
 end
 
 
@@ -129,14 +85,16 @@ function projection_reconstructedDataset(phi_data, lambda_data, ...
 %   phi0                  : rim latitude (same meaning as in Retistruct)
 %   method                : 'equidistant' | 'equalarea' | 'conformal'
 %
-% This:
-%   1) projects rim & datapoints to a polar disc
-%   2) draws the circular retina
-%   3) overlays the datapoints
+% Steps (matched to the R implementation):
+%   1) project rim & datapoints to a polar disc (south-pole aspect)
+%   2) convert the raw azimuthal coordinates into the GUI's degree grid
+%   3) draw the circular retina, rim, and datapoints
 
     if nargin < 6
         method = 'equidistant';
     end
+
+    [projectionMode, isAreaPreserving, projectionLabel] = normalize_projection(method);
 
     % Ensure column vectors
     phi_data    = phi_data(:);
@@ -144,52 +102,54 @@ function projection_reconstructedDataset(phi_data, lambda_data, ...
     phi_rim     = phi_rim(:);
     lambda_rim  = lambda_rim(:);
 
-    % --- 1. Project rim & datapoints to disc ---
-    [xr, yr] = sphere_spherical_to_polar_cart(phi_rim,  lambda_rim,  phi0, method);
-    [xd, yd] = sphere_spherical_to_polar_cart(phi_data, lambda_data, phi0, method);
+    % --- 1. Project rim & datapoints to disc (raw units) ---
+    [xr_raw, yr_raw] = sphere_spherical_to_polar_cart(phi_rim,  lambda_rim,  projectionMode);
+    [xd_raw, yd_raw] = sphere_spherical_to_polar_cart(phi_data, lambda_data, projectionMode);
 
-    % --- 2. Plot setup ---
+    % --- 2. Match Retistruct scaling (degrees with rim at phi0d+90) ---
+    rim_xy   = rho_to_degrees([xr_raw, yr_raw], phi0, isAreaPreserving);
+    data_xy  = rho_to_degrees([xd_raw, yd_raw], phi0, isAreaPreserving);
+    rimRadius = phi_to_rho(phi0, phi0, isAreaPreserving);
+    plotExtent = 1.05 * rimRadius;
+
+    % Ideal rim circle for reference
+    th  = linspace(0, 2*pi, 400);
+    idealCircle = rimRadius * [cos(th); sin(th)];
+
+    % --- 3. Plot setup ---
     figure('Color','w', 'Position', [100 100 1100 500]);
 
-    % Subplot 1: original Retistruct-style scatter + rim
+    % Subplot 1: scatter + rim (Retistruct style)
     subplot(1,2,1); hold on; axis equal;
-    set(gca, 'Visible', 'off');  % like Retistruct’s default
-
-    % Draw rim as a smooth circle at radius 1 (idealised boundary)
-    th  = linspace(0, 2*pi, 400);
-    xc  = cos(th);
-    yc  = sin(th);
-    plot(xc, yc, 'k-', 'LineWidth', 1);    % ideal rim
-    % Also draw the actual rim polygon from the reconstruction
-    plot(xr, yr, 'k-', 'LineWidth', 1.5);
-    % --- 3. Plot datapoints ---
-    plot(xd, yd, 'o', ...
+    set(gca, 'Visible', 'off');
+    plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1);
+    plot(rim_xy(:,1), rim_xy(:,2), 'k-', 'LineWidth', 1.5);
+    plot(data_xy(:,1), data_xy(:,2), 'o', ...
         'MarkerSize', 2, ...
         'MarkerFaceColor', [0.2 0.4 1.0], ...
         'MarkerEdgeColor', 'k');
-    xlim([-1.1, 1.1]);
-    ylim([-1.1, 1.1]);
-    title(sprintf('Retistruct-style projection (%s)', method), 'Interpreter', 'none');
+    xlim([-plotExtent, plotExtent]);
+    ylim([-plotExtent, plotExtent]);
+    title(sprintf('Retistruct-style projection (%s)', projectionLabel), 'Interpreter', 'none');
 
     % Subplot 2: adaptive KDE density heatmap on flattened disc
     subplot(1,2,2); hold on; axis equal;
-    gridLimit = 1.05;
     gridRes = 220;
-    gridLin = linspace(-gridLimit, gridLimit, gridRes);
+    gridLin = linspace(-plotExtent, plotExtent, gridRes);
     [gridX, gridY] = meshgrid(gridLin, gridLin);
-    insideMask = hypot(gridX, gridY) <= 1 + 1e-6;
+    insideMask = hypot(gridX, gridY) <= (rimRadius + 1e-6);
     densityGrid = nan(size(gridX));
     if any(insideMask(:))
        evalPoints = [gridX(insideMask), gridY(insideMask)];
-       densityVals = adaptiveKDE([xd, yd], evalPoints);
+       densityVals = adaptiveKDE(data_xy, evalPoints);
        densityGrid(insideMask) = densityVals;
     end
     contourf(gridX, gridY, densityGrid, 32, 'LineColor', 'none');
     colormap(gca, parula);
-    plot(xc, yc, 'k-', 'LineWidth', 1.25);
-    plot(xr, yr, 'k-', 'LineWidth', 1.5);
-    xlim([-gridLimit, gridLimit]);
-    ylim([-gridLimit, gridLimit]);
+    plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1.25);
+    plot(rim_xy(:,1), rim_xy(:,2), 'k-', 'LineWidth', 1.5);
+    xlim([-plotExtent, plotExtent]);
+    ylim([-plotExtent, plotExtent]);
     axis off;
     title('Adaptive KDE density on flattened disc');
     cb = colorbar('Location', 'eastoutside');
@@ -237,5 +197,67 @@ function densityVals = adaptiveKDE(points, evalPoints)
     end
 
     densityVals = densityVals / n;
+end
+
+function pos = rho_to_degrees(pos, phi0, areaPreserving)
+% Scale polar Cartesian coordinates to match Retistruct's degree grid.
+    if nargin < 3
+        areaPreserving = false;
+    end
+
+    if areaPreserving
+        phi0d = phi0 * 180 / pi;
+        rho0  = spherical_to_polar_area(phi0);
+        scale = (phi0d + 90) / rho0;
+    else
+        scale = 180 / pi;
+    end
+
+    pos = pos * scale;
+end
+
+function rho = phi_to_rho(phi, phi0, areaPreserving)
+% Convert a latitude to the GUI's radial coordinate.
+    if nargin < 3
+        areaPreserving = false;
+    end
+
+    if areaPreserving
+        phi0d = phi0 * 180 / pi;
+        rho0  = spherical_to_polar_area(phi0);
+        rho   = (phi0d + 90) / rho0 * spherical_to_polar_area(phi);
+    else
+        rho = (phi + pi/2) * 180 / pi;
+    end
+end
+
+function rho = spherical_to_polar_area(phi)
+% Area-preserving azimuthal radius used by Retistruct (unit sphere).
+    rho = sqrt(2 * (1 + sin(phi)));
+end
+
+function [mode, isAreaPreserving, label] = normalize_projection(method)
+% Map user-friendly method names to Retistruct projection modes.
+    if nargin < 1 || isempty(method)
+        method = 'equidistant';
+    end
+
+    method = lower(method);
+    switch method
+        case {'equidistant', 'latitude', 'lat'}
+            mode = 'latitude';
+            isAreaPreserving = false;
+            label = 'Azimuthal equidistant';
+        case {'equalarea', 'area', 'pa'}
+            mode = 'area';
+            isAreaPreserving = true;
+            label = 'Lambert azimuthal equal-area';
+        case {'conformal', 'angle', 'stereographic'}
+            mode = 'angle';
+            isAreaPreserving = false;
+            label = 'Stereographic (angle-preserving)';
+        otherwise
+            error('Unknown projection method "%s". Use equidistant | equalarea | conformal.', method);
+    end
 end
 
