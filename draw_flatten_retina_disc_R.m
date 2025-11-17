@@ -1,5 +1,7 @@
-clear; close all; clc;
-dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test07\data.mat';
+clear;  clc;
+% close all;
+% dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test07\data.mat';
+dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\kcng4\data.mat';
 
 
 
