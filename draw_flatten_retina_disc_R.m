@@ -1,10 +1,11 @@
 clear;  clc;
 % close all;
-%dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Test07\data.mat';
-dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\kcng4\data.mat';
+%dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\SMI32\data.mat';
+%dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\kcng4\data.mat';
+ dataFile = 'C:\Users\jhsiang\Documents\R-retistruct\Mouse1R\data.mat';
 
 % Rotation parameter (in degrees)
-rotation_ang = 45;  % Set rotation angle in degrees; change as needed
+rotation_ang = 10;  % Set rotation angle in degrees; change as needed
 
 % DIAGNOSTIC: Inspect data ranges and distribution
 S = load(dataFile);
