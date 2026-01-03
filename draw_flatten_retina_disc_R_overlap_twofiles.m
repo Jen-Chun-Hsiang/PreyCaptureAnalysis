@@ -8,12 +8,15 @@ dataFileA = 'C:\Users\jhsiang\Documents\R-retistruct\SMI32\data.mat';
 dataFileB = 'C:\Users\jhsiang\Documents\R-retistruct\Mouse1R\data.mat';
 
 % Colors for dataset A and B (RGB in [0..1])
-colorA = [1 1 0];
+colorA = [1  0 0];
 colorB = [0 0 1];
 
 % Rotations (degrees) used in the SECOND ROW only
 rotation_ang_A = 0;
 rotation_ang_B = 10;
+
+% Toggle what to display: 'both' | 'only_A' | 'only_B'
+showMode = 'both';
 
 % Projection mode
 method   = 'equidistant'; % 'equidistant' | 'equalarea' | 'conformal'
@@ -21,9 +24,12 @@ rim_type = 'actual';      % 'ideal' | 'actual'
 
 % Density overlay appearance
 gridRes = 220;
-gammaA  = 0.65;
-gammaB  = 0.65;
-alphaMax = 0.95; % overall alpha cap for density overlay
+totalPrctile = 99;      % robust scale percentile for total density (A+B)
+logKTotal = 0;       % log compression on total density (0 disables)
+gammaTotal = 1.0;      % gamma on total brightness/value (<1 boosts background)
+mixPower = 1;         % >1 tightens "equal mix" band around p=0.5
+whiteStrength = 0.2;    % 0..1: how strongly overlap becomes white
+whitePower = 1.2;       % >1 requires higher total density to whiten
 
 % ================= LOAD BOTH FILES =================
 [A, nameA] = load_retistruct_file(dataFileA, rim_type);
@@ -60,8 +66,12 @@ subplot(2,2,1); hold on; axis equal;
 set(gca, 'Visible', 'off');
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1);
 plot(rimA_0(:,1), rimA_0(:,2), 'k-', 'LineWidth', 1.25);
-plot(xyA_0(:,1), xyA_0(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorA, 'MarkerEdgeColor', colorA);
-plot(xyB_0(:,1), xyB_0(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorB, 'MarkerEdgeColor', colorB);
+if ~strcmpi(showMode, 'only_B')
+    plot(xyA_0(:,1), xyA_0(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorA, 'MarkerEdgeColor', colorA);
+end
+if ~strcmpi(showMode, 'only_A')
+    plot(xyB_0(:,1), xyB_0(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorB, 'MarkerEdgeColor', colorB);
+end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 title(sprintf('Original overlay (%s)\nA=%s, B=%s', projectionLabel, nameA, nameB), 'Interpreter','none');
@@ -73,25 +83,39 @@ subplot(2,2,2); hold on; axis equal;
 dA0 = density_on_grid(xyA_0, gridX, gridY, insideMask);
 dB0 = density_on_grid(xyB_0, gridX, gridY, insideMask);
 
-rgb0 = density_pair_to_rgb(dA0, dB0, insideMask, colorA, colorB, gammaA, gammaB);
-alpha0 = min(alphaMax, 0.15 + 0.85 * normalize01(nansum(cat(3,dA0,dB0),3), insideMask));
+switch lower(showMode)
+    case 'only_a'
+        dB0 = zeros(size(dB0));
+    case 'only_b'
+        dA0 = zeros(size(dA0));
+    case 'both'
+        % no-op
+    otherwise
+        error('Unknown showMode "%s". Use both | only_A | only_B.', showMode);
+end
 
-imagesc(gridX(1,:), gridY(:,1), rgb0, 'AlphaData', alpha0);
+rgb0 = density_bivariate_to_rgb(dA0, dB0, insideMask, colorA, colorB, totalPrctile, logKTotal, gammaTotal, mixPower, whiteStrength, whitePower);
+imagesc(gridX(1,:), gridY(:,1), rgb0);
 set(gca, 'YDir', 'normal');
+set(gca, 'Color', [1 1 1]);
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1.25);
 plot(rimA_0(:,1), rimA_0(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
-title('Original overlay - density (RGB blend)');
+title('Original overlay - density (bivariate: dominance hue, total brightness)');
 
 % -------- Row 2 / Col 1: dots (overlaid, rotated independently) --------
 subplot(2,2,3); hold on; axis equal;
 set(gca, 'Visible', 'off');
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1);
 plot(rimA_r(:,1), rimA_r(:,2), 'k-', 'LineWidth', 1.25);
-plot(xyA_r(:,1), xyA_r(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorA, 'MarkerEdgeColor', colorA);
-plot(xyB_r(:,1), xyB_r(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorB, 'MarkerEdgeColor', colorB);
+if ~strcmpi(showMode, 'only_B')
+    plot(xyA_r(:,1), xyA_r(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorA, 'MarkerEdgeColor', colorA);
+end
+if ~strcmpi(showMode, 'only_A')
+    plot(xyB_r(:,1), xyB_r(:,2), 'o', 'MarkerSize', 3, 'MarkerFaceColor', colorB, 'MarkerEdgeColor', colorB);
+end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 title(sprintf('Rotated overlay (%s)\nA=%.1f\x00B0, B=%.1f\x00B0', projectionLabel, rotation_ang_A, rotation_ang_B), 'Interpreter','none');
@@ -102,17 +126,27 @@ subplot(2,2,4); hold on; axis equal;
 dAr = density_on_grid(xyA_r, gridX, gridY, insideMask);
 dBr = density_on_grid(xyB_r, gridX, gridY, insideMask);
 
-rgbr = density_pair_to_rgb(dAr, dBr, insideMask, colorA, colorB, gammaA, gammaB);
-alphar = min(alphaMax, 0.15 + 0.85 * normalize01(nansum(cat(3,dAr,dBr),3), insideMask));
+switch lower(showMode)
+    case 'only_a'
+        dBr = zeros(size(dBr));
+    case 'only_b'
+        dAr = zeros(size(dAr));
+    case 'both'
+        % no-op
+    otherwise
+        error('Unknown showMode "%s". Use both | only_A | only_B.', showMode);
+end
 
-imagesc(gridX(1,:), gridY(:,1), rgbr, 'AlphaData', alphar);
+rgbr = density_bivariate_to_rgb(dAr, dBr, insideMask, colorA, colorB, totalPrctile, logKTotal, gammaTotal, mixPower, whiteStrength, whitePower);
+imagesc(gridX(1,:), gridY(:,1), rgbr);
 set(gca, 'YDir', 'normal');
+set(gca, 'Color', [1 1 1]);
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1.25);
 plot(rimA_r(:,1), rimA_r(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
-title('Rotated overlay - density (RGB blend)');
+title('Rotated overlay - density (bivariate: dominance hue, total brightness)');
 
 
 % ================= HELPERS =================
@@ -182,35 +216,75 @@ function densityGrid = density_on_grid(points_xy, gridX, gridY, insideMask)
     end
 end
 
-function rgb = density_pair_to_rgb(dA, dB, insideMask, colorA, colorB, gammaA, gammaB)
-    a = normalize01(dA, insideMask) .^ gammaA;
-    b = normalize01(dB, insideMask) .^ gammaB;
+function rgb = density_bivariate_to_rgb(dA, dB, insideMask, colorA, colorB, totalPrctile, logKTotal, gammaTotal, mixPower, whiteStrength, whitePower)
+% density_bivariate_to_rgb (Option B)
+%   t = dA + dB controls brightness/value
+%   p = dB / (dA + dB + eps) controls hue between colorA and colorB
+%   If desired, strong overlap (p~0.5 AND high t) is pushed toward white.
 
-    % Multiply-blend on white background (keeps both colors visible)
-    % rgb = 1 - (1 - colorA*a) * (1 - colorB*b)
-    rgb = ones([size(dA,1), size(dA,2), 3]);
-    for c = 1:3
-        layerA = 1 - colorA(c) .* a;
-        layerB = 1 - colorB(c) .* b;
-        rgb(:,:,c) = 1 - (layerA .* layerB);
+    t = dA + dB;
+    p = dB ./ (t + eps);
+
+    % --- brightness from total density (robust scale + optional log compression) ---
+    tvals = t(insideMask);
+    tvals = tvals(~isnan(tvals));
+    if isempty(tvals)
+        s = 1;
+    else
+        s = prctile(tvals, totalPrctile);
+        if ~isfinite(s) || s <= 0
+            s = max(tvals);
+        end
+        if ~isfinite(s) || s <= 0
+            s = 1;
+        end
     end
 
-    % Outside disc: pure white
+    v = zeros(size(t));
+    tin = max(0, t);
+    if logKTotal > 0
+        denom = log1p(logKTotal * s);
+        if ~isfinite(denom) || denom <= 0
+            denom = 1;
+        end
+        v(insideMask) = log1p(logKTotal * tin(insideMask)) ./ denom;
+    else
+        v(insideMask) = tin(insideMask) ./ max(s, eps);
+    end
+    v = min(1, max(0, v));
+    v = v .^ gammaTotal;
+
+    % --- hue from dominance ---
+    base = zeros([size(t,1), size(t,2), 3]);
+    for c = 1:3
+        base(:,:,c) = (1 - p) .* colorA(c) + p .* colorB(c);
+    end
+
+    % --- whiten strong overlap only when both are present and total is high ---
+    % mix = 1 at p=0.5 (equal), 0 at extremes
+    mix = 1 - 2 * abs(p - 0.5);
+    mix = min(1, max(0, mix));
+    mix = mix .^ mixPower;
+
+    w = whiteStrength .* (mix .* (v .^ whitePower));
+    w = min(1, max(0, w));
+
+    col = zeros([size(t,1), size(t,2), 3]);
+    for c = 1:3
+        col(:,:,c) = (1 - w) .* base(:,:,c) + w; % blend toward white
+    end
+
+    % --- render on white background with brightness v ---
+    rgb = ones([size(t,1), size(t,2), 3]);
+    for c = 1:3
+        rgb(:,:,c) = 1 - v .* (1 - col(:,:,c));
+    end
+
     for c = 1:3
         tmp = rgb(:,:,c);
         tmp(~insideMask) = 1;
         rgb(:,:,c) = tmp;
     end
-end
-
-function out = normalize01(v, insideMask)
-    out = zeros(size(v));
-    mx = max(v(insideMask), [], 'omitnan');
-    if isempty(mx) || ~isfinite(mx) || mx <= 0
-        mx = 1;
-    end
-    out(insideMask) = v(insideMask) ./ mx;
-    out(~insideMask) = 0;
 end
 
 function [x, y, rho] = sphere_spherical_to_polar_cart(phi, lambda, preserve)
