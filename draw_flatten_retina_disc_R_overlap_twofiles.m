@@ -6,6 +6,8 @@ clear; clc;
 % (must contain at least: x, y, phi0; and for rim_type='actual': phi, lambda, rim_idx)
 dataFileA = 'C:\Users\jhsiang\Documents\R-retistruct\SMI32\data.mat';
 dataFileB = 'C:\Users\jhsiang\Documents\R-retistruct\Mouse1R\data.mat';
+figure_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
+
 
 % Colors for dataset A and B (RGB in [0..1])
 colorA = [1  0 0];
