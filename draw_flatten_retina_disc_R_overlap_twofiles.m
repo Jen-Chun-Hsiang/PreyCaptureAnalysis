@@ -38,7 +38,8 @@ showAngleScaleBar = true;
 scaleBarDeg = 20;           % length of bar in degrees
 showAngleGrid = true;      % rings/spokes on the disc
 gridRingStepDeg = 30;       % concentric rings every N degrees
-gridSpokeStepDeg = 45;      % spokes every N degrees
+gridSpokeStepDeg = 180;      % spokes every N degrees
+excludeSpokeAnglesDeg = [0 180];  % remove diagonal spokes (set [] to keep all)
 
 % ================= LOAD BOTH FILES =================
 [A, nameA] = load_retistruct_file(dataFileA, rim_type);
@@ -83,7 +84,7 @@ if ~strcmpi(showMode, 'only_A')
 end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
-add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title(sprintf('Original overlay (%s)\nA=%s, B=%s', projectionLabel, nameA, nameB), 'Interpreter','none');
 
 % -------- Row 1 / Col 2: density (overlaid RGB) --------
@@ -113,7 +114,7 @@ plot(rimA_0(:,1), rimA_0(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
-add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title('Original overlay - density (bivariate: dominance hue, total brightness)');
 
 % -------- Row 2 / Col 1: dots (overlaid, rotated independently) --------
@@ -129,7 +130,7 @@ if ~strcmpi(showMode, 'only_A')
 end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
-add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title(sprintf('Rotated overlay (%s)\nA=%.1f\x00B0, B=%.1f\x00B0', projectionLabel, rotation_ang_A, rotation_ang_B), 'Interpreter','none');
 
 % -------- Row 2 / Col 2: density (overlaid RGB, rotated independently) --------
@@ -158,7 +159,7 @@ plot(rimA_r(:,1), rimA_r(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
-add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title('Rotated overlay - density (bivariate: dominance hue, total brightness)');
 
 % ================= SAVE FIGURE =================
@@ -449,7 +450,7 @@ function [mode, isAreaPreserving, label] = normalize_projection(method)
     end
 end
 
-function add_angle_overlays(ax, rimRadiusDeg, plotExtent, showScaleBar, scaleBarDeg, showGrid, ringStepDeg, spokeStepDeg)
+function add_angle_overlays(ax, rimRadiusDeg, plotExtent, showScaleBar, scaleBarDeg, showGrid, ringStepDeg, spokeStepDeg, excludeSpokeAnglesDeg)
     if nargin < 1 || isempty(ax) || ~isgraphics(ax)
         ax = gca;
     end
@@ -473,8 +474,18 @@ function add_angle_overlays(ax, rimRadiusDeg, plotExtent, showScaleBar, scaleBar
         if nargin < 8 || isempty(spokeStepDeg) || spokeStepDeg <= 0
             spokeStepDeg = 45;
         end
+        if nargin < 9 || isempty(excludeSpokeAnglesDeg)
+            excludeSpokeAnglesDeg = [];
+        end
         spokes = 0:spokeStepDeg:(360 - spokeStepDeg);
         for ang = spokes
+            if ~isempty(excludeSpokeAnglesDeg)
+                angN = mod(ang, 360);
+                exN = mod(excludeSpokeAnglesDeg(:)', 360);
+                if any(abs(angN - exN) < 1e-9)
+                    continue;
+                end
+            end
             a = deg2rad(ang);
             x = [0, rimRadiusDeg * cos(a)];
             y = [0, rimRadiusDeg * sin(a)];
