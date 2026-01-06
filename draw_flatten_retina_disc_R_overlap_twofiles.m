@@ -33,6 +33,13 @@ mixPower = 1;         % >1 tightens "equal mix" band around p=0.5
 whiteStrength = 0.2;    % 0..1: how strongly overlap becomes white
 whitePower = 1.2;       % >1 requires higher total density to whiten
 
+% Angle/scale overlays (coordinates are in degrees after rho_to_degrees)
+showAngleScaleBar = true;
+scaleBarDeg = 20;           % length of bar in degrees
+showAngleGrid = true;      % rings/spokes on the disc
+gridRingStepDeg = 30;       % concentric rings every N degrees
+gridSpokeStepDeg = 45;      % spokes every N degrees
+
 % ================= LOAD BOTH FILES =================
 [A, nameA] = load_retistruct_file(dataFileA, rim_type);
 [B, nameB] = load_retistruct_file(dataFileB, rim_type);
@@ -76,6 +83,7 @@ if ~strcmpi(showMode, 'only_A')
 end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
 title(sprintf('Original overlay (%s)\nA=%s, B=%s', projectionLabel, nameA, nameB), 'Interpreter','none');
 
 % -------- Row 1 / Col 2: density (overlaid RGB) --------
@@ -105,6 +113,7 @@ plot(rimA_0(:,1), rimA_0(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
 title('Original overlay - density (bivariate: dominance hue, total brightness)');
 
 % -------- Row 2 / Col 1: dots (overlaid, rotated independently) --------
@@ -120,6 +129,7 @@ if ~strcmpi(showMode, 'only_A')
 end
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
 title(sprintf('Rotated overlay (%s)\nA=%.1f\x00B0, B=%.1f\x00B0', projectionLabel, rotation_ang_A, rotation_ang_B), 'Interpreter','none');
 
 % -------- Row 2 / Col 2: density (overlaid RGB, rotated independently) --------
@@ -148,7 +158,33 @@ plot(rimA_r(:,1), rimA_r(:,2), 'k-', 'LineWidth', 1.25);
 xlim([-plotExtent, plotExtent]);
 ylim([-plotExtent, plotExtent]);
 axis off;
+add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg);
 title('Rotated overlay - density (bivariate: dominance hue, total brightness)');
+
+% ================= SAVE FIGURE =================
+% Create output folder if it doesn't exist
+if ~exist(figure_folder, 'dir')
+    mkdir(figure_folder);
+    fprintf('Created folder: %s\n', figure_folder);
+end
+
+% Generate filename from current parameters
+timestamp = datetime('now', 'Format', 'yyyyMMdd_HHmmss');
+filename_base = sprintf('overlap_%s_rot%.0f_%s_gamma%.2f_mix%.1f_white%.1f_%s', ...
+    showMode, rotation_ang_B, method, gammaTotal, mixPower, whiteStrength, timestamp);
+
+% Save as PNG (high resolution, 300 dpi)
+png_file = fullfile(figure_folder, [filename_base '.png']);
+print(gcf, png_file, '-dpng', '-r300');
+fprintf('Saved PNG: %s\n', png_file);
+
+% Save as EPS (vector, Illustrator-compatible)
+% Use -painters renderer for vector graphics and component editability
+eps_file = fullfile(figure_folder, [filename_base '.eps']);
+print(gcf, eps_file, '-depsc', '-painters', '-r300');
+fprintf('Saved EPS: %s\n', eps_file);
+
+fprintf('\nFiles saved to: %s\n', figure_folder);
 
 
 % ================= HELPERS =================
@@ -410,5 +446,65 @@ function [mode, isAreaPreserving, label] = normalize_projection(method)
             label = 'Stereographic (angle-preserving)';
         otherwise
             error('Unknown projection method "%s". Use equidistant | equalarea | conformal.', method);
+    end
+end
+
+function add_angle_overlays(ax, rimRadiusDeg, plotExtent, showScaleBar, scaleBarDeg, showGrid, ringStepDeg, spokeStepDeg)
+    if nargin < 1 || isempty(ax) || ~isgraphics(ax)
+        ax = gca;
+    end
+
+    hold(ax, 'on');
+
+    % Optional polar grid (all in degrees)
+    if showGrid
+        % Concentric rings
+        if nargin < 7 || isempty(ringStepDeg) || ringStepDeg <= 0
+            ringStepDeg = 30;
+        end
+        ringR = ringStepDeg:ringStepDeg:floor(rimRadiusDeg / ringStepDeg) * ringStepDeg;
+        th = linspace(0, 2*pi, 400);
+        for r = ringR
+            plot(ax, r*cos(th), r*sin(th), '-', 'Color', [0 0 0], 'LineWidth', 0.5);
+            text(ax, 0, -r, sprintf('%g\x00B0', r), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 8, 'Color', [0 0 0]);
+        end
+
+        % Spokes
+        if nargin < 8 || isempty(spokeStepDeg) || spokeStepDeg <= 0
+            spokeStepDeg = 45;
+        end
+        spokes = 0:spokeStepDeg:(360 - spokeStepDeg);
+        for ang = spokes
+            a = deg2rad(ang);
+            x = [0, rimRadiusDeg * cos(a)];
+            y = [0, rimRadiusDeg * sin(a)];
+            plot(ax, x, y, '-', 'Color', [0 0 0], 'LineWidth', 0.5);
+        end
+    end
+
+    % Optional scale bar (in degrees)
+    if showScaleBar
+        if nargin < 5 || isempty(scaleBarDeg) || scaleBarDeg <= 0
+            scaleBarDeg = 20;
+        end
+
+        y = -0.85 * rimRadiusDeg;
+        x0 = -0.85 * rimRadiusDeg;
+        x1 = x0 + scaleBarDeg;
+        maxX = 0.85 * rimRadiusDeg;
+        if x1 > maxX
+            x0 = maxX - scaleBarDeg;
+            x1 = maxX;
+        end
+
+        % Keep within plot limits even if rimRadiusDeg is close to plotExtent
+        x0 = max(-plotExtent, min(plotExtent, x0));
+        x1 = max(-plotExtent, min(plotExtent, x1));
+        y  = max(-plotExtent, min(plotExtent, y));
+
+        plot(ax, [x0 x1], [y y], 'k-', 'LineWidth', 2);
+        plot(ax, [x0 x0], [y-0.8 y+0.8], 'k-', 'LineWidth', 1);
+        plot(ax, [x1 x1], [y-0.8 y+0.8], 'k-', 'LineWidth', 1);
+        text(ax, (x0+x1)/2, y, sprintf('%g\x00B0', scaleBarDeg), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', 'FontSize', 9, 'Color', 'k');
     end
 end
