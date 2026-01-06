@@ -41,6 +41,11 @@ gridRingStepDeg = 30;       % concentric rings every N degrees
 gridSpokeStepDeg = 180;      % spokes every N degrees
 excludeSpokeAnglesDeg = [0 180];  % remove diagonal spokes (set [] to keep all)
 
+% Slice settings (spherical space)
+% Slice goes through the center along lambda = sliceAnglesDeg(1) and the opposite direction sliceAnglesDeg(2).
+sliceAnglesDeg = [30 210];
+nSliceSamples = 401;
+
 % ================= LOAD BOTH FILES =================
 [A, nameA] = load_retistruct_file(dataFileA, rim_type);
 [B, nameB] = load_retistruct_file(dataFileB, rim_type);
@@ -69,10 +74,10 @@ idealCircle = rimRadius * [cos(th); sin(th)];
 [xyB_r, rimB_r] = project_one_dataset(B, phi0_common, projectionMode, isAreaPreserving, rotation_ang_B);
 
 % ================= FIGURE =================
-figure('Color','w', 'Position', [100 100 1400 1000]);
+figure('Color','w', 'Position', [100 100 1900 1000]);
 
 % -------- Row 1 / Col 1: dots (overlaid) --------
-subplot(2,2,1); hold on; axis equal;
+subplot(2,3,1); hold on; axis equal;
 set(gca, 'Visible', 'off');
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1);
 plot(rimA_0(:,1), rimA_0(:,2), 'k-', 'LineWidth', 1.25);
@@ -88,7 +93,7 @@ add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, s
 title(sprintf('Original overlay (%s)\nA=%s, B=%s', projectionLabel, nameA, nameB), 'Interpreter','none');
 
 % -------- Row 1 / Col 2: density (overlaid RGB) --------
-subplot(2,2,2); hold on; axis equal;
+subplot(2,3,2); hold on; axis equal;
 [gridX, gridY, insideMask] = make_disc_grid(plotExtent, rimRadius, gridRes);
 
 dA0 = density_on_grid(xyA_0, gridX, gridY, insideMask);
@@ -117,8 +122,34 @@ axis off;
 add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title('Original overlay - density (bivariate: dominance hue, total brightness)');
 
+% -------- Row 1 / Col 3: slice density profiles (A vs B) --------
+subplot(2,3,3); hold on;
+[sliceXY_0, sliceS_0] = make_spherical_diameter_slice(phi0_common, sliceAnglesDeg, projectionMode, isAreaPreserving, 0, nSliceSamples);
+dSliceA0 = adaptiveKDE(xyA_0, sliceXY_0);
+dSliceB0 = adaptiveKDE(xyB_0, sliceXY_0);
+
+switch lower(showMode)
+    case 'only_a'
+        dSliceB0(:) = 0;
+    case 'only_b'
+        dSliceA0(:) = 0;
+    case 'both'
+        % no-op
+end
+
+plot(sliceS_0, dSliceA0, '-', 'Color', colorA, 'LineWidth', 2);
+plot(sliceS_0, dSliceB0, '-', 'Color', colorB, 'LineWidth', 2);
+grid on;
+xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
+ylabel('KDE density (a.u.)');
+xlim([-rimRadius, rimRadius]);
+xticks([-rimRadius 0 rimRadius]);
+xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
+legend({nameA, nameB}, 'Interpreter', 'none', 'Location', 'best');
+title(sprintf('Slice density (spherical): %d\x00B0 \x2194 %d\x00B0 (original)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
+
 % -------- Row 2 / Col 1: dots (overlaid, rotated independently) --------
-subplot(2,2,3); hold on; axis equal;
+subplot(2,3,4); hold on; axis equal;
 set(gca, 'Visible', 'off');
 plot(idealCircle(1,:), idealCircle(2,:), 'k-', 'LineWidth', 1);
 plot(rimA_r(:,1), rimA_r(:,2), 'k-', 'LineWidth', 1.25);
@@ -134,7 +165,7 @@ add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, s
 title(sprintf('Rotated overlay (%s)\nA=%.1f\x00B0, B=%.1f\x00B0', projectionLabel, rotation_ang_A, rotation_ang_B), 'Interpreter','none');
 
 % -------- Row 2 / Col 2: density (overlaid RGB, rotated independently) --------
-subplot(2,2,4); hold on; axis equal;
+subplot(2,3,5); hold on; axis equal;
 
 dAr = density_on_grid(xyA_r, gridX, gridY, insideMask);
 dBr = density_on_grid(xyB_r, gridX, gridY, insideMask);
@@ -161,6 +192,36 @@ ylim([-plotExtent, plotExtent]);
 axis off;
 add_angle_overlays(gca, rimRadius, plotExtent, showAngleScaleBar, scaleBarDeg, showAngleGrid, gridRingStepDeg, gridSpokeStepDeg, excludeSpokeAnglesDeg);
 title('Rotated overlay - density (bivariate: dominance hue, total brightness)');
+
+% -------- Row 2 / Col 3: slice density profiles (A vs B, rotated) --------
+subplot(2,3,6); hold on;
+[sliceXY_r, sliceS_r] = make_spherical_diameter_slice(phi0_common, sliceAnglesDeg, projectionMode, isAreaPreserving, rotation_ang_A, nSliceSamples);
+
+% Evaluate on the same spherical slice for the rotated view:
+% A uses rotation_ang_A, B uses rotation_ang_B
+[sliceXY_Br, ~] = make_spherical_diameter_slice(phi0_common, sliceAnglesDeg, projectionMode, isAreaPreserving, rotation_ang_B, nSliceSamples);
+dSliceAr = adaptiveKDE(xyA_r, sliceXY_r);
+dSliceBr = adaptiveKDE(xyB_r, sliceXY_Br);
+
+switch lower(showMode)
+    case 'only_a'
+        dSliceBr(:) = 0;
+    case 'only_b'
+        dSliceAr(:) = 0;
+    case 'both'
+        % no-op
+end
+
+plot(sliceS_r, dSliceAr, '-', 'Color', colorA, 'LineWidth', 2);
+plot(sliceS_r, dSliceBr, '-', 'Color', colorB, 'LineWidth', 2);
+grid on;
+xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
+ylabel('KDE density (a.u.)');
+xlim([-rimRadius, rimRadius]);
+xticks([-rimRadius 0 rimRadius]);
+xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
+legend({nameA, nameB}, 'Interpreter', 'none', 'Location', 'best');
+title(sprintf('Slice density (spherical): %d\x00B0 \x2194 %d\x00B0 (rotated)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
 
 % ================= SAVE FIGURE =================
 % Create output folder if it doesn't exist
@@ -518,4 +579,39 @@ function add_angle_overlays(ax, rimRadiusDeg, plotExtent, showScaleBar, scaleBar
         plot(ax, [x1 x1], [y-0.8 y+0.8], 'k-', 'LineWidth', 1);
         text(ax, (x0+x1)/2, y, sprintf('%g\x00B0', scaleBarDeg), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', 'FontSize', 9, 'Color', 'k');
     end
+end
+
+function [sliceXY_deg, sliceS_deg] = make_spherical_diameter_slice(phi0, sliceAnglesDeg, projectionMode, isAreaPreserving, rotation_deg, nSamples)
+    if nargin < 6 || isempty(nSamples)
+        nSamples = 401;
+    end
+    if nargin < 5 || isempty(rotation_deg)
+        rotation_deg = 0;
+    end
+
+    lam1 = deg2rad(sliceAnglesDeg(1));
+    lam2 = deg2rad(sliceAnglesDeg(2));
+    if rotation_deg ~= 0
+        rot_rad = rotation_deg * pi / 180;
+        lam1 = rotate_spherical_coords(lam1, rot_rad);
+        lam2 = rotate_spherical_coords(lam2, rot_rad);
+    end
+
+    n1 = ceil(nSamples/2);
+    n2 = nSamples - n1 + 1;
+
+    % On this spherical cap, the center maps to phi = -pi/2 (rho=0).
+    phi1 = linspace(phi0, -pi/2, n1)';
+    phi2 = linspace(-pi/2, phi0, n2)';
+    phi2 = phi2(2:end); % avoid duplicating the center sample
+
+    phiSlice = [phi1; phi2];
+    lamSlice = [repmat(lam1, n1, 1); repmat(lam2, numel(phi2), 1)];
+
+    [xRaw, yRaw] = sphere_spherical_to_polar_cart(phiSlice, lamSlice, projectionMode);
+    sliceXY_deg = rho_to_degrees([xRaw, yRaw], phi0, isAreaPreserving);
+
+    % Signed position along the diameter in the plotted (degree) space.
+    dir = [cos(deg2rad(sliceAnglesDeg(1))), sin(deg2rad(sliceAnglesDeg(1)))];
+    sliceS_deg = sliceXY_deg(:,1) * dir(1) + sliceXY_deg(:,2) * dir(2);
 end
