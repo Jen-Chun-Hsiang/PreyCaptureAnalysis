@@ -159,14 +159,16 @@ end
 
 plot(sliceS_0, dSliceA0, '-', 'Color', colorA, 'LineWidth', 2);
 plot(sliceS_0, dSliceB0, '-', 'Color', colorB, 'LineWidth', 2);
-grid on;
-xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
+grid off;
+xlabel('Degrees from center (\x00B0)');
 ylabel('KDE density (#/mm^2)');
-xlim([-rimRadius, rimRadius]);
-xticks([-rimRadius 0 rimRadius]);
-xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
+maxAbs0 = max(abs(sliceS_0));
+xlim([-maxAbs0, maxAbs0]);
+ylim([0 60]);
+yticks(0:30:60);
+yticklabels({'0','30','60'});
 legend({nameA, nameB}, 'Interpreter', 'none', 'Location', 'best');
-title(sprintf('Slice density (spherical): %d\x00B0 \x2194 %d\x00B0 (original)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
+title(sprintf('%d\x00B0 \x2194 %d\x00B0 slice density (original)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
 
 % -------- Row 2 / Col 1: dots (overlaid, rotated independently) --------
 subplot(2,3,4); hold on; axis equal;
@@ -240,14 +242,16 @@ end
 
 plot(sliceS_r, dSliceAr, '-', 'Color', colorA, 'LineWidth', 2);
 plot(sliceS_r, dSliceBr, '-', 'Color', colorB, 'LineWidth', 2);
-grid on;
-xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
+grid off;
+xlabel('Degrees from center (\x00B0)');
 ylabel('KDE density (#/mm^2)');
-xlim([-rimRadius, rimRadius]);
-xticks([-rimRadius 0 rimRadius]);
-xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
+maxAbsr = max(abs(sliceS_r));
+xlim([-maxAbsr, maxAbsr]);
+ylim([0 60]);
+yticks(0:30:60);
+yticklabels({'0','30','60'});
 legend({nameA, nameB}, 'Interpreter', 'none', 'Location', 'best');
-title(sprintf('Slice density (spherical): %d\x00B0 \x2194 %d\x00B0 (rotated)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
+title(sprintf('%d\x00B0 \x2194 %d\x00B0 slice density (rotated)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
 
 % ================= SAVE FIGURE =================
 % Create output folder if it doesn't exist
