@@ -33,6 +33,11 @@ mixPower = 1;         % >1 tightens "equal mix" band around p=0.5
 whiteStrength = 0.2;    % 0..1: how strongly overlap becomes white
 whitePower = 1.2;       % >1 requires higher total density to whiten
 
+% KDE bandwidth control
+% Smaller -> more local (sharper) density; larger -> smoother density.
+% Typical range: 0.3 to 1.5
+kdeBandwidthScale = 0.7;
+
 % Angle/scale overlays (coordinates are in degrees after rho_to_degrees)
 showAngleScaleBar = true;
 scaleBarDeg = 20;           % length of bar in degrees
@@ -45,6 +50,14 @@ excludeSpokeAnglesDeg = [0 180];  % remove diagonal spokes (set [] to keep all)
 % Slice goes through the center along lambda = sliceAnglesDeg(1) and the opposite direction sliceAnglesDeg(2).
 sliceAnglesDeg = [30 210];
 nSliceSamples = 401;
+
+% Unit conversion: mouse retina scale (visual degrees to retinal mm)
+% If 1 visual degree corresponds to 32.5 um on the retina:
+% KDE here outputs #/deg^2 (because xy are in degrees), so convert via:
+%   (#/mm^2) = (#/deg^2) / (mmPerDeg^2)
+micronsPerDeg = 32.5;
+mmPerDeg = micronsPerDeg / 1000;
+densityDeg2_to_mm2 = 1 / (mmPerDeg^2);
 
 % ================= LOAD BOTH FILES =================
 [A, nameA] = load_retistruct_file(dataFileA, rim_type);
@@ -96,8 +109,8 @@ title(sprintf('Original overlay (%s)\nA=%s, B=%s', projectionLabel, nameA, nameB
 subplot(2,3,2); hold on; axis equal;
 [gridX, gridY, insideMask] = make_disc_grid(plotExtent, rimRadius, gridRes);
 
-dA0 = density_on_grid(xyA_0, gridX, gridY, insideMask);
-dB0 = density_on_grid(xyB_0, gridX, gridY, insideMask);
+dA0 = density_on_grid(xyA_0, gridX, gridY, insideMask, densityDeg2_to_mm2, kdeBandwidthScale);
+dB0 = density_on_grid(xyB_0, gridX, gridY, insideMask, densityDeg2_to_mm2, kdeBandwidthScale);
 
 switch lower(showMode)
     case 'only_a'
@@ -125,8 +138,15 @@ title('Original overlay - density (bivariate: dominance hue, total brightness)')
 % -------- Row 1 / Col 3: slice density profiles (A vs B) --------
 subplot(2,3,3); hold on;
 [sliceXY_0, sliceS_0] = make_spherical_diameter_slice(phi0_common, sliceAnglesDeg, projectionMode, isAreaPreserving, 0, nSliceSamples);
-dSliceA0 = adaptiveKDE(xyA_0, sliceXY_0);
-dSliceB0 = adaptiveKDE(xyB_0, sliceXY_0);
+dSliceA0 = adaptiveKDE(xyA_0, sliceXY_0, kdeBandwidthScale);
+dSliceB0 = adaptiveKDE(xyB_0, sliceXY_0, kdeBandwidthScale);
+
+% adaptiveKDE returns a *probability density* (integrates to 1).
+% Convert to *count density* by multiplying by number of cells, then convert units.
+nCellsA0 = size(xyA_0, 1);
+nCellsB0 = size(xyB_0, 1);
+dSliceA0 = dSliceA0 * nCellsA0 * densityDeg2_to_mm2;
+dSliceB0 = dSliceB0 * nCellsB0 * densityDeg2_to_mm2;
 
 switch lower(showMode)
     case 'only_a'
@@ -141,7 +161,7 @@ plot(sliceS_0, dSliceA0, '-', 'Color', colorA, 'LineWidth', 2);
 plot(sliceS_0, dSliceB0, '-', 'Color', colorB, 'LineWidth', 2);
 grid on;
 xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
-ylabel('KDE density (a.u.)');
+ylabel('KDE density (#/mm^2)');
 xlim([-rimRadius, rimRadius]);
 xticks([-rimRadius 0 rimRadius]);
 xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
@@ -167,8 +187,8 @@ title(sprintf('Rotated overlay (%s)\nA=%.1f\x00B0, B=%.1f\x00B0', projectionLabe
 % -------- Row 2 / Col 2: density (overlaid RGB, rotated independently) --------
 subplot(2,3,5); hold on; axis equal;
 
-dAr = density_on_grid(xyA_r, gridX, gridY, insideMask);
-dBr = density_on_grid(xyB_r, gridX, gridY, insideMask);
+dAr = density_on_grid(xyA_r, gridX, gridY, insideMask, densityDeg2_to_mm2, kdeBandwidthScale);
+dBr = density_on_grid(xyB_r, gridX, gridY, insideMask, densityDeg2_to_mm2, kdeBandwidthScale);
 
 switch lower(showMode)
     case 'only_a'
@@ -200,8 +220,14 @@ subplot(2,3,6); hold on;
 % Evaluate on the same spherical slice for the rotated view:
 % A uses rotation_ang_A, B uses rotation_ang_B
 [sliceXY_Br, ~] = make_spherical_diameter_slice(phi0_common, sliceAnglesDeg, projectionMode, isAreaPreserving, rotation_ang_B, nSliceSamples);
-dSliceAr = adaptiveKDE(xyA_r, sliceXY_r);
-dSliceBr = adaptiveKDE(xyB_r, sliceXY_Br);
+dSliceAr = adaptiveKDE(xyA_r, sliceXY_r, kdeBandwidthScale);
+dSliceBr = adaptiveKDE(xyB_r, sliceXY_Br, kdeBandwidthScale);
+
+% Convert probability density -> count density, then deg^2 -> mm^2
+nCellsAr = size(xyA_r, 1);
+nCellsBr = size(xyB_r, 1);
+dSliceAr = dSliceAr * nCellsAr * densityDeg2_to_mm2;
+dSliceBr = dSliceBr * nCellsBr * densityDeg2_to_mm2;
 
 switch lower(showMode)
     case 'only_a'
@@ -216,7 +242,7 @@ plot(sliceS_r, dSliceAr, '-', 'Color', colorA, 'LineWidth', 2);
 plot(sliceS_r, dSliceBr, '-', 'Color', colorB, 'LineWidth', 2);
 grid on;
 xlabel(sprintf('Position along slice (%d\x00B0 \x2194 %d\x00B0), deg', sliceAnglesDeg(1), sliceAnglesDeg(2)));
-ylabel('KDE density (a.u.)');
+ylabel('KDE density (#/mm^2)');
 xlim([-rimRadius, rimRadius]);
 xticks([-rimRadius 0 rimRadius]);
 xticklabels({sprintf('%d\x00B0', sliceAnglesDeg(2)), 'center', sprintf('%d\x00B0', sliceAnglesDeg(1))});
@@ -307,11 +333,18 @@ function [gridX, gridY, insideMask] = make_disc_grid(plotExtent, rimRadius, grid
     insideMask = hypot(gridX, gridY) <= (rimRadius + 1e-6);
 end
 
-function densityGrid = density_on_grid(points_xy, gridX, gridY, insideMask)
+function densityGrid = density_on_grid(points_xy, gridX, gridY, insideMask, densityDeg2_to_mm2, kdeBandwidthScale)
     densityGrid = nan(size(gridX));
     if any(insideMask(:))
         evalPoints = [gridX(insideMask), gridY(insideMask)];
-        densityVals = adaptiveKDE(points_xy, evalPoints);
+        densityVals = adaptiveKDE(points_xy, evalPoints, kdeBandwidthScale);
+
+        % adaptiveKDE returns a probability density (integrates to 1 over deg^2).
+        % Convert to count density (#/mm^2).
+        if nargin >= 5 && ~isempty(densityDeg2_to_mm2)
+            nCells = size(points_xy, 1);
+            densityVals = densityVals * nCells * densityDeg2_to_mm2;
+        end
         densityGrid(insideMask) = densityVals;
     end
 end
@@ -416,7 +449,12 @@ function lambda_rotated = rotate_spherical_coords(lambda, rotation_rad)
     lambda_rotated = mod(lambda_rotated + pi, 2*pi) - pi;
 end
 
-function densityVals = adaptiveKDE(points, evalPoints)
+function densityVals = adaptiveKDE(points, evalPoints, bandwidthScale)
+    if nargin < 3 || isempty(bandwidthScale)
+        bandwidthScale = 1.0;
+    end
+    bandwidthScale = max(bandwidthScale, eps);
+
     n = size(points, 1);
     if n < 2
         densityVals = zeros(size(evalPoints, 1), 1);
@@ -431,6 +469,7 @@ function densityVals = adaptiveKDE(points, evalPoints)
     sigmaBase(sigmaBase <= 0) = max(rangeVals) * 0.01 + eps;
 
     baseBandwidth = 1.06 .* sigmaBase .* n^(-1/6);
+    baseBandwidth = baseBandwidth .* bandwidthScale;
     baseBandwidth(baseBandwidth <= 0) = eps;
 
     pilot = mvksdensity(points, points, ...
@@ -611,7 +650,9 @@ function [sliceXY_deg, sliceS_deg] = make_spherical_diameter_slice(phi0, sliceAn
     [xRaw, yRaw] = sphere_spherical_to_polar_cart(phiSlice, lamSlice, projectionMode);
     sliceXY_deg = rho_to_degrees([xRaw, yRaw], phi0, isAreaPreserving);
 
-    % Signed position along the diameter in the plotted (degree) space.
-    dir = [cos(deg2rad(sliceAnglesDeg(1))), sin(deg2rad(sliceAnglesDeg(1)))];
-    sliceS_deg = sliceXY_deg(:,1) * dir(1) + sliceXY_deg(:,2) * dir(2);
+    % Signed position along the spherical diameter, in "degree" radial units.
+    % This is rotation-invariant and matches the disc's radial scale.
+    rhoDeg = phi_to_rho(phiSlice, phi0, isAreaPreserving);
+    sliceS_deg = rhoDeg;
+    sliceS_deg((n1+1):end) = -sliceS_deg((n1+1):end);
 end
