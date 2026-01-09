@@ -10,8 +10,8 @@ figure_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCapt
 
 
 % Colors for dataset A and B (RGB in [0..1])
-colorA = [1  0 0];
-colorB = [0 0 1];
+colorA = [1  0 1];
+colorB = [0  1 0];
 
 % Rotations (degrees) used in the SECOND ROW only
 rotation_ang_A = 0;
@@ -30,8 +30,8 @@ totalPrctile = 99;      % robust scale percentile for total density (A+B)
 logKTotal = 0;       % log compression on total density (0 disables)
 gammaTotal = 1.0;      % gamma on total brightness/value (<1 boosts background)
 mixPower = 1;         % >1 tightens "equal mix" band around p=0.5
-whiteStrength = 0.2;    % 0..1: how strongly overlap becomes white
-whitePower = 1.2;       % >1 requires higher total density to whiten
+whiteStrength = 0;    % 0..1: how strongly overlap becomes white
+whitePower = 1.7;       % >1 requires higher total density to whiten
 
 % KDE bandwidth control
 % Smaller -> more local (sharper) density; larger -> smoother density.
