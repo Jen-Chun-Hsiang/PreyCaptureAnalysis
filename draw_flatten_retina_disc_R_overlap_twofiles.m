@@ -51,6 +51,9 @@ excludeSpokeAnglesDeg = [0 180];  % remove diagonal spokes (set [] to keep all)
 sliceAnglesDeg = [30 210];
 nSliceSamples = 401;
 
+% Slice stats: width at fraction of peak (e.g., 0.85 = drop to 85% of peak)
+bandwidth_thr = 0.75;
+
 % Unit conversion: mouse retina scale (visual degrees to retinal mm)
 % If 1 visual degree corresponds to 32.5 um on the retina:
 % KDE here outputs #/deg^2 (because xy are in degrees), so convert via:
@@ -85,6 +88,13 @@ idealCircle = rimRadius * [cos(th); sin(th)];
 % ================= PROJECT (ROW 2: WITH ROTATIONS) =================
 [xyA_r, rimA_r] = project_one_dataset(A, phi0_common, projectionMode, isAreaPreserving, rotation_ang_A);
 [xyB_r, rimB_r] = project_one_dataset(B, phi0_common, projectionMode, isAreaPreserving, rotation_ang_B);
+
+% ================= KDE BANDWIDTH SUMMARY (CONSOLE) =================
+% Coordinates are in visual degrees after rho_to_degrees().
+% This prints the *base* bandwidth (per-axis) used in the pilot KDE and
+% the distribution of *adaptive* per-point bandwidths.
+print_kde_bandwidth_summary(xyA_0, kdeBandwidthScale, micronsPerDeg, sprintf('Dataset A (%s)', nameA));
+print_kde_bandwidth_summary(xyB_0, kdeBandwidthScale, micronsPerDeg, sprintf('Dataset B (%s)', nameB));
 
 % ================= FIGURE =================
 figure('Color','w', 'Position', [100 100 1900 1000]);
@@ -252,6 +262,9 @@ yticks(0:30:60);
 yticklabels({'0','30','60'});
 legend({nameA, nameB}, 'Interpreter', 'none', 'Location', 'best');
 title(sprintf('%d\x00B0 \x2194 %d\x00B0 slice density (rotated)', sliceAnglesDeg(1), sliceAnglesDeg(2)), 'Interpreter','none');
+
+% --- Console stats for bottom-right slice curves ---
+print_slice_curve_stats(sliceS_r, dSliceAr, dSliceBr, bandwidth_thr, micronsPerDeg, nameA, nameB, 'Bottom-right (rotated)');
 
 % ================= SAVE FIGURE =================
 % Create output folder if it doesn't exist
@@ -494,6 +507,192 @@ function densityVals = adaptiveKDE(points, evalPoints, bandwidthScale)
     end
 
     densityVals = densityVals / n;
+end
+
+function print_slice_curve_stats(x, yA, yB, thrFrac, micronsPerDeg, nameA, nameB, label)
+    if nargin < 4 || isempty(thrFrac)
+        thrFrac = 0.85;
+    end
+    thrFrac = max(min(thrFrac, 1), 0);
+    if nargin < 5
+        micronsPerDeg = NaN;
+    end
+    if nargin < 6 || isempty(nameA)
+        nameA = 'A';
+    end
+    if nargin < 7 || isempty(nameB)
+        nameB = 'B';
+    end
+    if nargin < 8 || isempty(label)
+        label = 'Slice stats';
+    end
+
+    statsA = peak_and_width_at_fraction(x, yA, thrFrac);
+    statsB = peak_and_width_at_fraction(x, yB, thrFrac);
+
+    % Cross-peak ratios
+    ratioAatB = NaN;
+    ratioBatA = NaN;
+    if isfinite(statsA.peakY) && statsA.peakY > 0 && isfinite(statsB.peakX)
+        yA_at_peakB = interp1_safe(x, yA, statsB.peakX);
+        ratioAatB = yA_at_peakB / statsA.peakY;
+    end
+    if isfinite(statsB.peakY) && statsB.peakY > 0 && isfinite(statsA.peakX)
+        yB_at_peakA = interp1_safe(x, yB, statsA.peakX);
+        ratioBatA = yB_at_peakA / statsB.peakY;
+    end
+
+    fprintf('\n[SliceStats] %s (thr=%.2f of peak)\n', label, thrFrac);
+    fprintf('  %s peak: x=%.3f deg, y=%.3f (#/mm^2)\n', nameA, statsA.peakX, statsA.peakY);
+    fprintf('  %s width@thr (full): %.3f deg (L=%.3f, R=%.3f); half=%.3f deg\n', nameA, statsA.widthDeg, statsA.leftX, statsA.rightX, statsA.widthDeg/2);
+    fprintf('  %s peak: x=%.3f deg, y=%.3f (#/mm^2)\n', nameB, statsB.peakX, statsB.peakY);
+    fprintf('  %s width@thr (full): %.3f deg (L=%.3f, R=%.3f); half=%.3f deg\n', nameB, statsB.widthDeg, statsB.leftX, statsB.rightX, statsB.widthDeg/2);
+    fprintf('  Cross-peak ratios: %s(x_peak_%s)/%s_peak = %.3f,  %s(x_peak_%s)/%s_peak = %.3f\n', ...
+        nameA, nameB, nameA, ratioAatB, nameB, nameA, nameB, ratioBatA);
+
+    if isfinite(micronsPerDeg)
+        fprintf('  Width@thr (um): %s=%.1f, %s=%.1f\n', ...
+            nameA, statsA.widthDeg * micronsPerDeg, nameB, statsB.widthDeg * micronsPerDeg);
+    end
+end
+
+function s = peak_and_width_at_fraction(x, y, thrFrac)
+    s = struct('peakX', NaN, 'peakY', NaN, 'leftX', NaN, 'rightX', NaN, 'widthDeg', NaN);
+    if isempty(x) || isempty(y)
+        return;
+    end
+    x = x(:);
+    y = y(:);
+    good = isfinite(x) & isfinite(y);
+    x = x(good);
+    y = y(good);
+    if numel(x) < 3
+        return;
+    end
+
+    % Ensure x is monotonic for well-defined left/right crossings.
+    [x, ord] = sort(x);
+    y = y(ord);
+
+    [peakY, idxPeak] = max(y);
+    if ~isfinite(peakY) || peakY <= 0
+        s.peakX = x(idxPeak);
+        s.peakY = peakY;
+        return;
+    end
+    s.peakX = x(idxPeak);
+    s.peakY = peakY;
+
+    yThr = thrFrac * peakY;
+
+    % Left crossing: find last index < idxPeak where y drops below threshold
+    idxL = find(y(1:idxPeak) < yThr, 1, 'last');
+    if ~isempty(idxL) && idxL < idxPeak
+        s.leftX = interp_crossing_x(x(idxL), y(idxL), x(idxL+1), y(idxL+1), yThr);
+    end
+
+    % Right crossing: find first index > idxPeak where y drops below threshold
+    idxRrel = find(y(idxPeak:end) < yThr, 1, 'first');
+    if ~isempty(idxRrel)
+        idxR = idxPeak + idxRrel - 1;
+        if idxR > idxPeak
+            s.rightX = interp_crossing_x(x(idxR-1), y(idxR-1), x(idxR), y(idxR), yThr);
+        end
+    end
+
+    if isfinite(s.leftX) && isfinite(s.rightX)
+        xL = min(s.leftX, s.rightX);
+        xR = max(s.leftX, s.rightX);
+        s.leftX = xL;
+        s.rightX = xR;
+        s.widthDeg = xR - xL;
+    end
+end
+
+function xCross = interp_crossing_x(x1, y1, x2, y2, yThr)
+    % Linear interpolation for x where y hits yThr between (x1,y1) and (x2,y2)
+    if ~isfinite(x1) || ~isfinite(x2) || ~isfinite(y1) || ~isfinite(y2)
+        xCross = NaN;
+        return;
+    end
+    if y2 == y1
+        xCross = (x1 + x2) / 2;
+        return;
+    end
+    t = (yThr - y1) / (y2 - y1);
+    xCross = x1 + t * (x2 - x1);
+end
+
+function yq = interp1_safe(x, y, xq)
+    yq = NaN;
+    if isempty(x) || isempty(y) || ~isfinite(xq)
+        return;
+    end
+    x = x(:);
+    y = y(:);
+    good = isfinite(x) & isfinite(y);
+    x = x(good);
+    y = y(good);
+    if numel(x) < 2
+        return;
+    end
+    if xq < min(x) || xq > max(x)
+        return;
+    end
+    yq = interp1(x, y, xq, 'linear');
+end
+
+function print_kde_bandwidth_summary(points, bandwidthScale, micronsPerDeg, label)
+    if nargin < 2 || isempty(bandwidthScale)
+        bandwidthScale = 1.0;
+    end
+    if nargin < 3 || isempty(micronsPerDeg)
+        micronsPerDeg = NaN;
+    end
+    if nargin < 4 || isempty(label)
+        label = 'Dataset';
+    end
+
+    n = size(points, 1);
+    if n < 2
+        fprintf('[KDE] %s: n=%d (not enough points for bandwidth estimate)\n', label, n);
+        return;
+    end
+
+    sigmaBase = std(points, 0, 1);
+    sigmaBase(isnan(sigmaBase)) = 0;
+    rangeVals = max(points, [], 1) - min(points, [], 1);
+    zeroIdx = sigmaBase <= 0;
+    sigmaBase(zeroIdx) = rangeVals(zeroIdx) / max(sqrt(n), 1);
+    sigmaBase(sigmaBase <= 0) = max(rangeVals) * 0.01 + eps;
+
+    baseBW = 1.06 .* sigmaBase .* n^(-1/6);
+    baseBW = baseBW .* max(bandwidthScale, eps);
+    baseBW(baseBW <= 0) = eps;
+
+    % Adaptive factors lambda(i) from pilot density at each data point
+    pilot = mvksdensity(points, points, 'Bandwidth', baseBW, 'Kernel', 'normal');
+    pilot = max(pilot, realmin);
+    geomMeanPilot = exp(mean(log(pilot)));
+    lambda = (pilot / geomMeanPilot) .^ (-0.5);
+
+    hiX = baseBW(1) .* lambda;
+    hiY = baseBW(2) .* lambda;
+
+    p = [10 50 90];
+    bx = prctile(hiX, p);
+    by = prctile(hiY, p);
+
+    fprintf('[KDE] %s: n=%d\n', label, n);
+    fprintf('  Base BW (deg):  [%.3f  %.3f]\n', baseBW(1), baseBW(2));
+    fprintf('  Adaptive BW (deg) 10/50/90%%:  x=[%.3f %.3f %.3f], y=[%.3f %.3f %.3f]\n', bx(1), bx(2), bx(3), by(1), by(2), by(3));
+
+    if isfinite(micronsPerDeg)
+        fprintf('  Base BW (um):   [%.1f  %.1f]\n', baseBW(1) * micronsPerDeg, baseBW(2) * micronsPerDeg);
+        fprintf('  Adaptive BW (um) 10/50/90%%:  x=[%.1f %.1f %.1f], y=[%.1f %.1f %.1f]\n', ...
+            bx(1) * micronsPerDeg, bx(2) * micronsPerDeg, bx(3) * micronsPerDeg, ...
+            by(1) * micronsPerDeg, by(2) * micronsPerDeg, by(3) * micronsPerDeg);
+    end
 end
 
 function pos = rho_to_degrees(pos, phi0, areaPreserving)
