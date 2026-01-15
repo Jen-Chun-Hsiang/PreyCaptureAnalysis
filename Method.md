@@ -222,13 +222,52 @@ $$
 \hat h(t) = a_1\,\mathcal{N}(t;\mu_1,\sigma_1) - a_2\,\mathcal{N}(t;\mu_2,\sigma_2) + b,
 $$
 
-the code defines a biphasic “strength” ratio using the fitted amplitudes $(a_1,a_2)$ from the optimizer output (stored as columns 5 and 6 of `Gauss_TF_est`). To keep the index on a consistent scale across ON and OFF cells, the analysis uses the ratio of the smaller to the larger amplitude:
+the analysis defines a biphasic “strength” ratio from the fitted amplitudes. There are two closely related parameterizations in the codebase:
+
+- **Independent-amplitude parameterization (`GaussianTemporalFilter.m` + `gaussian_temporalfilter.m`)**. The fitted parameter vector is
 
 $$
-\mathrm{BI}_{\mathrm{strength}} = \frac{\min(a_1,a_2)}{\max(a_1,a_2)} \in [0,1].
+w=[\sigma_1,\sigma_2,\mu_1,\mu_2,a_1,a_2,b],
 $$
 
-In practice this is implemented as $a_2/a_1$ for ON cells and $a_1/a_2$ for OFF cells (so that the index remains $\le 1$).
+and the fitted filter is
+
+$$
+\hat h(t)= a_1\,\mathcal{N}(t;\mu_1,\sigma_1) - a_2\,\mathcal{N}(t;\mu_2,\sigma_2) + b.
+$$
+
+- **Amplitude+ratio parameterization (`GaussianTemporalFilter2.m`, used by the white-noise summary script)**. The fitted parameter vector is
+
+$$
+w=[\sigma_1,\sigma_2,\mu_1,\mu_2,A,\rho,b],
+$$
+
+and the fitted filter is
+
+$$
+\hat h(t)= A\,\mathcal{N}(t;\mu_1,\sigma_1) - (\rho A)\,\mathcal{N}(t;\mu_2,\sigma_2) + b.
+$$
+
+Here $A$ is the primary-lobe amplitude scale and $\rho$ is the secondary-to-primary lobe amplitude ratio (constrained to be nonnegative in the optimizer).
+
+For paper reporting, the natural “ratio of secondary to primary lobe magnitude” from the fitted model is
+
+$$
+\mathrm{BI}_{\mathrm{strength}} = \frac{\min(|a_1|,|a_2|)}{\max(|a_1|,|a_2|)}\in[0,1],
+$$
+
+which reduces to $\min(\rho, 1/\rho)$ under the amplitude+ratio parameterization.
+
+**As implemented in the current analysis scripts**, the fitted-strength biphasy metric is computed from the stored optimizer output `Gauss_TF_est` as a ratio of columns 5 and 6 with an ON/OFF-specific inversion:
+
+- For ON cells: `TF_biphasic_stregth = Gauss_TF_est(:,6) ./ Gauss_TF_est(:,5)`
+- For OFF cells: `TF_biphasic_stregth = Gauss_TF_est(:,5) ./ Gauss_TF_est(:,6)`
+
+This choice enforces a consistent ordering across polarities (so values remain $\le 1$ if columns 5 and 6 represent the two lobe magnitudes). When using `GaussianTemporalFilter2.m`, note that column 6 is the ratio $\rho$ and the inhibitory-lobe amplitude is $\rho\,A$.
+
+$$
+\mathrm{BI}_{\mathrm{strength}} \approx \frac{\text{secondary lobe magnitude}}{\text{primary lobe magnitude}}.
+$$
 
 ## Static nonlinearity (LN output stage)
 
