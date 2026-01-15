@@ -55,6 +55,20 @@ Stimulus frames (and/or stimulus parameter time series) were aligned to the resp
 
 Let $S(\mathbf{x}, t)$ denote the stimulus value at pixel/location $\mathbf{x}$ at time bin $t$ (e.g., intensity or contrast). The stimulus history window preceding a spike spans a fixed number of bins corresponding to a time window (e.g., hundreds of ms).
 
+**Implementation details (code-based parameters).** For the moving-noise RF estimation, stimuli and responses were represented on a $F_s=100\,\mathrm{Hz}$ time grid (bin width $\Delta t=10\,\mathrm{ms}$), and the spike-triggered history window was
+
+$$
+\mathrm{WinT} = [-0.5,\ 0]~\mathrm{s},
+$$
+
+corresponding to $N_T=\lceil 0.5\,F_s\rceil = 50$ time bins.
+
+The moving-noise stimulus frames were reconstructed from the experiment seed using MATLAB’s `RandStream('mrg32k3a','seed', IN.NoiseUniqueSeed)` to regenerate the underlying binary checkerboard, then:
+
+- Upsampled to a fixed image grid of $800\times 600$ pixels using nearest-neighbor interpolation.
+- Translated each frame by the recorded per-frame jitter offsets (`OUT.MovingSteps`) by shifting indices (out-of-bounds pixels filled with 0).
+- Converted from binary values to contrast values in $\{-1, +1\}$ via $S \leftarrow 2(S-0.5)$.
+
 ### Spike-triggered average (STA)
 
 The spatiotemporal spike-triggered average estimates the mean stimulus preceding spikes:
@@ -66,6 +80,18 @@ $$
 where $t_k$ are spike times on the binned grid, $\tau \ge 0$ indexes time lag, and $N_{\mathrm{sp}}$ is the number of spikes used.
 
 For spatial summaries (e.g., for center localization), the STA was reduced across time lags (e.g., by selecting or integrating over informative lags) and normalized to yield a spatial STA “strength” image.
+
+**Implementation details (code-based parameters).** Spikes were detected on the $10\,\mathrm{kHz}$ voltage trace using a peak-finding step (MATLAB `findpeaks` on the inverted trace) with a refractory constraint `MinPeakDistance = 40` samples ($4\,\mathrm{ms}$ at $10\,\mathrm{kHz}$). Spike times were then binned to the $F_s=100\,\mathrm{Hz}$ grid by summing spikes in non-overlapping $10\,\mathrm{ms}$ bins.
+
+The STA was accumulated using **per-bin spike counts** (not just spike times). For each $10\,\mathrm{ms}$ bin $t$ with spike count $r(t)$, the code adds $r(t)$ copies of the preceding stimulus history cube spanning the last 50 bins (covering $0.5\,\mathrm{s}$):
+
+$$
+\mathrm{STA}(\mathbf{x},\tau) \propto \sum_{t} r(t)\,S(\mathbf{x}, t-\tau), \quad \tau\in\{1,\dots,50\}.
+$$
+
+Within each stimulus block, the accumulated STA cube was normalized by the total spike count in that block (with `+eps` for numerical stability) and then averaged across noise blocks.
+
+To avoid circularity when estimating the static nonlinearity, the code randomly withheld a fraction of response bins from the STA computation (`nonlinear_ratio = 0.25`, i.e., 25% of eligible bins), reserving those withheld bins for the nonlinearity estimate.
 
 ### Spatial RF localization and parametric Gaussian fit
 
@@ -85,6 +111,50 @@ where $I(\mathbf{x})$ is the spatial STA-derived image and $\mathcal{M}$ is the 
 
 From $\Sigma$ we derived size-related quantities (e.g., equivalent diameter estimates) and ellipticity (ratio of principal-axis standard deviations).
 
+**Implementation details (code-based parameters).** In the moving-noise scripts, the spatial RF “strength” image was computed as the per-pixel standard deviation across STA lags,
+
+$$
+I(\mathbf{x}) = \mathrm{std}_{\tau}(\mathrm{STA}(\mathbf{x},\tau)).
+$$
+
+This image was median-filtered (`medfilt2`) and then thresholded to form a spatial mask $\mathcal{M}$:
+
+- A helper `peak_distance` was applied to the filtered image.
+- Only peaks beyond a minimum distance `minD = 100` (pixels) were considered.
+- A threshold was set at the 99th percentile of the corresponding peak scores: `ythr = quantile(y(x>minD), 0.99)`.
+- A binary mask was formed as `binary_image = smtstdSTA > ythr`, and the **largest 4-connected component** was kept via `largest_segment_4conn_mask`.
+
+Spatial RF parameters (center location, size, and orientation) were obtained by fitting the spatial image with a rotated elliptical Gaussian model implemented in `gaussian2d.m`. The fitted model is a **sum of two rotated elliptical Gaussians plus a constant offset**:
+
+$$
+G(x,y)= A\exp\Big(-\tfrac{1}{2}\big(\tfrac{x_\theta^2}{\sigma_x^2}+\tfrac{y_\theta^2}{\sigma_y^2}\big)\Big)
+\; +\; A_s\exp\Big(-\tfrac{1}{2}\big(\tfrac{x_\theta^2}{\sigma_{x,s}^2}+\tfrac{y_\theta^2}{\sigma_{y,s}^2}\big)\Big)
+\; +\; b,
+$$
+
+where $(x_\theta, y_\theta)$ are coordinates rotated by angle $\theta$. The parameter vector is
+
+$$
+	heta_{\mathrm{spatial}} = [x_0, y_0, \sigma_x, \sigma_y, \theta, b, A, \sigma_{x,s}, \sigma_{y,s}, A_s].
+$$
+
+Fits used Nelder–Mead optimization (`fminsearch`) with objective
+
+$$
+\hat\theta = \arg\min_{\theta}\; \big(1 - \mathrm{corr}(I(:), G_{\theta}(:))\big),
+$$
+
+starting from the initialization
+
+$$
+[x_0,y_0,\sigma_x,\sigma_y,\theta,b,A,\sigma_{x,s},\sigma_{y,s},A_s]
+= [\tfrac{W}{2},\tfrac{H}{2},50,50,0,0.1,1,200,200,0.1]
+$$
+
+(in pixels, with a small random jitter added to $(x_0,y_0)$), and with `MaxFunEvals = 600 * nParams`.
+
+Reported spatial RF size and orientation were derived from the fitted center Gaussian parameters $(\sigma_x,\sigma_y,\theta)$ and converted to physical units using the OLED calibration (`OLED.pixelSize`, i.e., $\mu\mathrm{m}$/pixel).
+
 ### Temporal receptive field (temporal filter)
 
 A temporal filter $h(\tau)$ was computed by spatially pooling the spatiotemporal STA with the fitted/selected spatial RF weights. Conceptually:
@@ -103,6 +173,29 @@ $$
 $$
 
 Fit parameters include peak times ($\mu_1,\mu_2$), widths ($\sigma_1,\sigma_2$), amplitudes ($a_1,a_2$), and offset $b$. From $\hat h(\tau)$ we computed standard temporal metrics such as time-to-peak, temporal width, and degree of biphasy.
+
+**Implementation details (code-based parameters).** The temporal filter was computed by (i) median filtering the STA cube in space–time (`medfilt3`), then (ii) projecting the filtered STA cube onto the masked spatial RF weights (the masked, median-filtered $I(\mathbf{x})$):
+
+$$
+\mathrm{tRF}(\tau) = \sum_{\mathbf{x}} \mathrm{STA}_{\mathrm{filt}}(\mathbf{x},\tau)\,w(\mathbf{x}),
+$$
+
+with $\tau$ sampled on the same $F_s=100\,\mathrm{Hz}$ grid over $[-0.5,0)$ seconds.
+
+Temporal fits were performed with the helper `GaussianTemporalFilter.m`, which normalizes the empirical temporal filter by its maximum (`scaling = max(tRF)`, storing that scaling factor) and then fits a two-Gaussian biphasic form by constrained optimization (`fmincon`). The fitted parameter vector is
+
+$$
+w = [\sigma_1,\sigma_2,\mu_1,\mu_2,a_1,a_2,b],
+$$
+
+with initial values $[2,\ 2,\ \arg\max(tRF),\ \arg\min(tRF),\ 0,\ 0,\ 0]$ (in **samples**) and box constraints:
+
+- $\sigma_1,\sigma_2\in[0,20]$ samples
+- $\mu_1,\mu_2\in[1,N_T]$ samples
+- $a_1,a_2\in[0,10]$
+- $b\in[-1,1]$
+
+To report time-to-peak with finer resolution, the downstream summary code interpolates $\mathrm{tRF}$ to 1000 samples over the $[-0.5,0]$ s window (cubic interpolation) and takes the ON peak as the maximum (OFF peak as the minimum), reporting peak time in ms. Temporal “width” is computed as the total duration where the interpolated trace exceeds a fixed threshold magnitude (`hwith_thr = 0.5`, with sign depending on ON/OFF).
 
 #### Biphasic index (code-based definitions)
 
