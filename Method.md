@@ -22,9 +22,28 @@ The “moving noise” stimulus is an extension of a standard checkerboard white
 
 Raw voltage traces were detrended and spikes were detected using a peak/threshold-based method. Detection thresholds were chosen per recording (to account for variability in noise floor and spike amplitude). Detected spike times were converted to a binned spike train.
 
+### Firing-rate representations (PSTHs): binning and smoothing parameters
+
+Across the stimulus-processing scripts (moving bars, moving spots, and stationary/varied-size spots), firing-rate traces were computed from detected spike times using **fixed binning** followed by an **optional smoothing** step:
+
+- **Raw sampling rate**: electrophysiology traces were sampled at $10\,\mathrm{kHz}$.
+- **Fixed binning**: spike counts were computed in non-overlapping bins on a grid of $F_s = 100\,\mathrm{Hz}$ (bin width $\Delta t = 10\,\mathrm{ms}$) by summing spikes within each $10\,\mathrm{ms}$ bin.
+- **Gaussian smoothing for PSTHs**: the binned spike counts were smoothed using a Gaussian window with width **$50\,\mathrm{ms}$** (MATLAB `smoothdata(..., 'gaussian', 0.05, 'SamplePoints', t)`), and then converted to firing rate in spikes/s by multiplying by $F_s$.
+
+This smoothing was used to produce visually stable PSTHs and to define a continuous-valued firing-rate signal for downstream analyses on these stimuli.
+
 ### Time base and downsampling
 
 To facilitate stimulus–response modeling, spike trains and stimulus time series were represented on a common discrete time grid. In the current analysis, responses were commonly downsampled/binned to $F_s = 100\ \mathrm{Hz}$ (bin width $\Delta t = 10\ \mathrm{ms}$). All temporal filtering and model fitting were performed on this grid unless otherwise noted.
+
+### Repeat averaging and mean firing rate
+
+Many stimulus conditions were repeated multiple times. For each condition, we computed:
+
+- A **trial-averaged PSTH** by averaging the per-trial firing-rate traces across repeats at each time bin.
+- A **mean firing rate** within a defined analysis window as the mean of the trial-averaged PSTH over time (equivalently, the average over both time and repeat when the window is the same for all repeats).
+
+Unless otherwise stated for a specific analysis, reported “mean firing rate” values refer to this repeat-averaged quantity (to reduce trial-to-trial variability).
 
 ### Alignment to stimulus timing
 
@@ -85,6 +104,39 @@ $$
 
 Fit parameters include peak times ($\mu_1,\mu_2$), widths ($\sigma_1,\sigma_2$), amplitudes ($a_1,a_2$), and offset $b$. From $\hat h(\tau)$ we computed standard temporal metrics such as time-to-peak, temporal width, and degree of biphasy.
 
+#### Biphasic index (code-based definitions)
+
+In the current analysis code, biphasy of the temporal filter was quantified in two closely related ways.
+
+1) **Peak-balance biphasic index (from the empirical temporal filter)**. Let $h(t)$ denote the empirical temporal filter (the spatially pooled STA-derived temporal receptive field, `tRF`). The code first interpolates $h(t)$ to a finer temporal grid (cubic interpolation to 1000 samples over the lag window) and then computes the positive and negative peak magnitudes:
+
+$$
+p = \max_t h(t), \qquad n = \left|\min_t h(t)\right|.
+$$
+
+The peak-balance biphasic index is then
+
+$$
+\mathrm{BI}_{\mathrm{peaks}} = 1 - \frac{|p-n|}{p+n} 
+= \frac{2\,\min(p,n)}{p+n},
+$$
+
+which lies in $[0,1]$ (0 = purely monophasic, 1 = equal-magnitude positive and negative lobes).
+
+2) **Fitted-amplitude biphasic index (from the two-Gaussian fit)**. For the fitted model
+
+$$
+\hat h(t) = a_1\,\mathcal{N}(t;\mu_1,\sigma_1) - a_2\,\mathcal{N}(t;\mu_2,\sigma_2) + b,
+$$
+
+the code defines a biphasic “strength” ratio using the fitted amplitudes $(a_1,a_2)$ from the optimizer output (stored as columns 5 and 6 of `Gauss_TF_est`). To keep the index on a consistent scale across ON and OFF cells, the analysis uses the ratio of the smaller to the larger amplitude:
+
+$$
+\mathrm{BI}_{\mathrm{strength}} = \frac{\min(a_1,a_2)}{\max(a_1,a_2)} \in [0,1].
+$$
+
+In practice this is implemented as $a_2/a_1$ for ON cells and $a_1/a_2$ for OFF cells (so that the index remains $\le 1$).
+
 ## Static nonlinearity (LN output stage)
 
 ### Generator signal
@@ -99,7 +151,7 @@ where $K(\mathbf{x})$ is a spatial RF (e.g., Gaussian fit or masked RF) and $h(\
 
 ### Nonlinearity estimation
 
-The static nonlinearity maps generator signal to firing rate. We estimated it empirically by binning $g(t)$ values and computing the mean firing rate within each bin:
+The static nonlinearity maps generator signal to firing rate. We estimated it empirically by binning $g(t)$ values and computing the mean firing rate within each bin. Here $r(t)$ denotes the measured firing rate on the discrete time grid (typically binned at $100\,\mathrm{Hz}$; smoothing may be applied depending on the stimulus/analysis stage):
 
 $$
 \hat r(g_i) = \frac{1}{|\mathcal{T}_i|}\sum_{t\in\mathcal{T}_i} r(t), \quad \mathcal{T}_i = \{t : g(t)\in\text{bin }i\}.
@@ -252,11 +304,51 @@ Parameters $(\tau,\alpha_d,\theta,\sigma_0,\alpha,\beta,b_{out},g_{out},w_{xs})$
 
 ### Model evaluation and repeat reliability
 
-Because responses were measured with repeated presentations, we quantified both:
+Because responses were measured with repeated presentations, we used **correlation-based repeat reliability** as a quality-control metric. The goal is to quantify how much of the time-varying response is stimulus-driven (repeatable) versus dominated by intrinsic trial-to-trial variability.
 
-- **Baseline reliability**: correlation between repeat-averaged responses across different repeat splits (or pairwise repeat correlations). This provides an empirical upper bound on explainable variance due to intrinsic trial-to-trial variability.
+In all cases below, reliability is based on the Pearson correlation coefficient computed between firing-rate time series from repeated presentations of the *same* stimulus condition.
 
-- **Prediction performance**: correlation between model prediction and measured response across time points, computed in a way that respects repeats (i.e., comparing predictions to the appropriate repeat-averaged response or using repeat-aware correlation measures).
+#### Moving bar and moving spot (condition-wise response quality)
+
+For moving bar and moving spot stimuli, responses were organized into a tensor
+repeats $\times$ time for each condition (direction/speed/size, etc.). For a given condition we assembled the per-repeat PSTHs into a matrix
+$\mathbf{Y}\in\mathbb{R}^{n_{\mathrm{rep}}\times T}$ (after removing time bins that were NaN for any repeat due to variable trial lengths). We then computed the repeat-by-repeat correlation matrix:
+
+$$
+\mathbf{R} = \mathrm{corr}(\mathbf{Y}^\top),
+$$
+
+and defined a scalar repeatability score as the mean of the off-diagonal entries (i.e., the mean pairwise correlation across repeats):
+
+$$
+\rho = \frac{2}{n_{\mathrm{rep}}(n_{\mathrm{rep}}-1)}\sum_{i<j} R_{ij}.
+$$
+
+In the current processing scripts this is typically stored/visualized as a squared correlation ("$R^2$"):
+
+$$
+\rho_{R^2} = \frac{2}{n_{\mathrm{rep}}(n_{\mathrm{rep}}-1)}\sum_{i<j} R_{ij}^2,
+$$
+
+and plotted as $\log(\rho_{R^2})$ as a compact "response quality" summary across stimulus conditions.
+
+#### Moving noise (repeated-block reliability)
+
+For moving-noise stimuli, the stimulus sequence includes explicitly repeated blocks. Repeat reliability was computed by extracting the response to each repeated block, binning spikes at $F_s = 100\,\mathrm{Hz}$ (bin width $10\,\mathrm{ms}$) into a per-block response trace, optionally smoothing each trace, and then computing the mean pairwise correlation across repeated blocks:
+
+$$
+\rho_{\mathrm{WN}} = \frac{2}{n_{\mathrm{rep}}(n_{\mathrm{rep}}-1)}\sum_{i<j} \mathrm{corr}(y_i, y_j).
+$$
+
+In the current moving-noise repeatability script, smoothing is implemented by convolving the binned spike-count trace with a Gaussian kernel (`gaussian_smooth_1d`) using a kernel length of 100 samples and Gaussian width parameter $\sigma=0.08\,\mathrm{s}$ (when enabled).
+
+#### Stationary/varied-size spot stimuli
+
+For stationary/varied-size spots, the main analysis scripts primarily use repeats to estimate mean response and variability (e.g., SEM) of firing rates within fixed ON/OFF analysis windows. A correlation-based repeat-reliability metric can be computed analogously to the moving-bar/moving-spot procedure (treating each repeat’s PSTH as a vector and averaging pairwise correlations), but this is not the primary QC summary implemented in the current stationary-spot processing script.
+
+#### Model prediction vs. repeatable response (repeat-aware correlation)
+
+For moving-bar model evaluation, prediction performance is computed using a repeat-aware correlation: predictions are compared to the measured response while respecting repeat structure by computing correlations within each repeat and then averaging these correlations across repeats (omitting NaNs).
 
 Performance was summarized across stimulus conditions and then aggregated across cells/groups.
 
