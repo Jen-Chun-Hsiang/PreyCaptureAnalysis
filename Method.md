@@ -111,6 +111,65 @@ where $I(\mathbf{x})$ is the spatial STA-derived image and $\mathcal{M}$ is the 
 
 From $\Sigma$ we derived size-related quantities (e.g., equivalent diameter estimates) and ellipticity (ratio of principal-axis standard deviations).
 
+#### Derived RF geometry metrics: `diameter` and `area` (per cell)
+
+Several downstream summary scripts compare per-cell spatial RF “size” using two related but distinct metrics computed from the spatial Gaussian fit and/or the spatial RF “strength” image (`stdSTA`). In the current codebase, these are exposed as `eval_target = 'diameter'` and `eval_target = 'area'` (e.g., `WhiteNoise_ONOFFalpha_Comparison*.m`).
+
+**RF diameter (`diameter`).** This metric is derived directly from the fitted *center* Gaussian parameters in `gauss_est`:
+
+- Let $\sigma_x,\sigma_y$ be the fitted Gaussian standard deviations (in **pixels**) along the principal axes of the center Gaussian.
+- Let `pixel_um` be the spatial calibration in $\mu\mathrm{m}$/pixel (e.g., `cfg.pixel_um = 4.375`, consistent with `OLED.pixelSize`).
+
+The code reports a “diameter” based on the **2\,\sigma ellipse** of the fitted Gaussian, using the geometric mean of the two axis standard deviations:
+
+$$
+D_{\mathrm{RF}} = 4\,\sqrt{\sigma_x\,\sigma_y}\;\cdot\;\mathrm{pixel\_um}\qquad(\mu\mathrm{m}).
+$$
+
+This matches the implementation:
+
+$$
+	exttt{avg\_rad} = 2\,\sqrt{\sigma_x\,\sigma_y}\;\times\;2\;\times\;\texttt{pixel\_um}.
+$$
+
+**Parameters used:** $\sigma_x,\sigma_y$ from `gauss_est` (columns 3–4) and `pixel_um`.
+
+**RF area (`area`).** This metric is computed as the area (number of pixels) of the **largest suprathreshold connected component** in the spatial RF image `stdSTA`, where the threshold is determined relative to a background distribution estimated outside the fitted RF core.
+
+Implementation (as in `FindThreshold_MeanMinusKStd.m` and the helper `compute_rf_pixels_from_gauss` embedded in `WhiteNoise_ONOFFalpha_Comparison_streamline.m`):
+
+1) Form a **2\,\sigma ellipse mask** from the fitted Gaussian parameters $(x_0,y_0,\sigma_x,\sigma_y,\theta)$.
+2) Use pixels **outside** that ellipse to estimate background mean and standard deviation $(\mu_{bg},\sigma_{bg})$.
+3) Set a scalar threshold
+
+$$
+T = \mu_{bg} + k\,\sigma_{bg},
+$$
+
+with `k = std_plus` (typically `std_plus = 2`).
+4) Threshold the image: `bw = stdSTA > T`.
+5) Find connected components (`bwconncomp` default connectivity for 2D = **8-connected**) and take the largest component’s area in pixels:
+
+$$
+	exttt{rf\_pixels} = \max_c |c|.
+$$
+
+Finally, convert to physical units:
+
+$$
+A_{\mathrm{RF}} = \texttt{rf\_pixels}\cdot \mathrm{pixel\_um}^2\qquad(\mu\mathrm{m}^2).
+$$
+
+**Parameters used:** `gauss_est` (for the 2\,\sigma ellipse that defines “background”), `std_plus` (threshold multiplier; default 2), and `pixel_um`.
+
+**Note on “diameter from area”.** Some exploratory scripts compute an *equivalent circular diameter* from $A_{\mathrm{RF}}$ via
+
+$$
+D_{\mathrm{eq}} = \sqrt{\frac{4A_{\mathrm{RF}}}{\pi}},
+$$
+
+but the standard `eval_target = 'diameter'` in the white-noise summary scripts uses the Gaussian-fit-based definition $D_{\mathrm{RF}}$ above (not $D_{\mathrm{eq}}$).
+
 **Implementation details (code-based parameters).** In the moving-noise scripts, the spatial RF “strength” image was computed as the per-pixel standard deviation across STA lags,
 
 $$

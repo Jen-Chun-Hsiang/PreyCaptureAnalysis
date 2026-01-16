@@ -17,7 +17,7 @@ location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',  
              'Temporal',...
              };
 
-process_version = 'GaussianFitting_processed_081425_1.mat';
+process_version = 'GaussianFitting_processed_011526_1.mat';
 is_normalized_tf = 1;
 save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
 if ~exist(save_folder, 'dir')
