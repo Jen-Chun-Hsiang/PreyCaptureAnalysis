@@ -406,8 +406,8 @@ box off
 %%
 p_ONn_t = ranksum(values(Ids{3}),values(Ids{4}))
 p_ONFF_t = ranksum(values(Ids{5}),values(Ids{6}))
-% [~, p_ONn_t] = ttest2(values(Ids{3}), values(Ids{4}))
-% [~, p_ONFF_t] = ttest2(values(Ids{5}), values(Ids{6}))
+[~, p_ONn_t] = ttest2(values(Ids{3}), values(Ids{4}))
+[~, p_ONFF_t] = ttest2(values(Ids{5}), values(Ids{6}))
 %%
 Colors = [0.3*ones(1, 3);
           0.6*ones(1, 3);

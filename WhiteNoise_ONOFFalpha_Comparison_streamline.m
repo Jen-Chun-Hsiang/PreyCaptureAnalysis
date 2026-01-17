@@ -63,7 +63,7 @@ cfg.allow_append_missing_fields_to_loaded_processed = false;
 % Plot + stats targets
 % Choose one: 'area' | 'diameter' | 'tftime2peak' | 'tfwidth' | 'tfbiphasicpeaks' | 'tfbiphasicstregth'
 % plus RF geometry vars if present in processed file.
-cfg.eval_target = 'diameter';
+cfg.eval_target = 'area';
 
 % Stats configuration
 cfg.alpha = 0.05;
@@ -274,14 +274,23 @@ hN = plot(S.ct, squeeze(mean(TracePlot(S.cell_type_numeric==cell_type_id & S.loc
 legend([hT,hN], 'Temporal', 'Nasal');
 xlabel('Time (s)'); ylabel('Normalized TF'); set(gca,'Box','off'); title('By location');
 
-%% ----------------------- Stats: biphasy (location comparison within Disp_Type) -----------------------
-locs = S.location_type_numeric(type_ids);
-x_loc = biphase_for_color(locs==0);
-y_loc = biphase_for_color(locs==1);
+%% ----------------------- Stats: location comparison within Disp_Type -----------------------
+% NOTE: biphase_for_color is a *fit-based ratio* derived from S.Gauss_TF_est.
+% To avoid confusion, only report this location comparison when the user-selected
+% cfg.eval_target matches this quantity.
+if strcmpi(cfg.eval_target, 'tfbiphasicstregth')
+    locs = S.location_type_numeric(type_ids);
+    x_nasal = biphase_for_color(locs==0);
+    y_temporal = biphase_for_color(locs==1);
 
-% Match original script behavior: use ttest2 here.
-[~, p_biphasy_loc] = ttest2(x_loc, y_loc);
-fprintf('\n[%s] Biphasy (fit-based ratio) Nasal vs Temporal: ttest2 p = %.4g\n', Disp_Type, p_biphasy_loc);
+    p_biphasy_loc_ttest = NaN;
+    if numel(x_nasal) >= 2 && numel(y_temporal) >= 2
+        [~, p_biphasy_loc_ttest] = ttest2(x_nasal, y_temporal);
+    end
+
+    fprintf('\n[%s] %s Nasal vs Temporal: ttest2 p=%.4g\n', ...
+        cfg.eval_target, Disp_Type, p_biphasy_loc_ttest);
+end
 
 %% ----------------------- Bar plot + stats for selected eval_target -----------------------
 Ids = cell(6,1);
@@ -349,6 +358,19 @@ end
     TF_time2peak, TF_width, TF_biphasic_peaks, TF_biphasic_stregth, ...
     rf_pixels, avg_rad, elipse_ratio, surround_center, cfg.pixel_um);
 
+%% ----------------------- Console summary stats -----------------------
+fprintf('\n[%s] Summary stats by group (mean, std)\n', cfg.eval_target);
+for gi = 1:6
+    v = values(Ids{gi});
+    v = v(~isnan(v));
+    n = numel(v);
+    if n == 0
+        fprintf('  %s: n=0 (all NaN or empty)\n', barlabels{gi});
+    else
+        fprintf('  %s: n=%d, mean=%.4g, std=%.4g\n', barlabels{gi}, n, mean(v), std(v));
+    end
+end
+
 Davg = nan(1,6);
 Dsem = nan(1,6);
 xticlab = cell(1,6);
@@ -390,14 +412,32 @@ if ~isempty(ylab), ylabel(ylab); end
 if ~isempty(ytick), yticks(ytick); end
 set(gca,'Box','off');
 
-% Stats between temporal vs nasal within ON and within OFF
-fprintf('\n[%s] Stats (ranksum): ON temporal vs ON nasal\n', cfg.eval_target);
-p_ONn_t = ranksum(values(Ids{3}), values(Ids{4}));
-disp(p_ONn_t);
+% Stats: ON vs OFF (ignore location)
+v_on = values(Ids{1}); v_on = v_on(~isnan(v_on));
+v_off = values(Ids{2}); v_off = v_off(~isnan(v_off));
+p_onoff_ttest = NaN;
+if numel(v_on) >= 2 && numel(v_off) >= 2
+    [~, p_onoff_ttest] = ttest2(v_on, v_off);
+end
+fprintf('\n[%s] ON vs OFF: ttest2 p=%.4g\n', cfg.eval_target, p_onoff_ttest);
 
-fprintf('\n[%s] Stats (ranksum): OFF temporal vs OFF nasal\n', cfg.eval_target);
-p_OFFn_t = ranksum(values(Ids{5}), values(Ids{6}));
-disp(p_OFFn_t);
+% Stats: Nasal vs Temporal (ignore ON/OFF)
+v_nasal_all = values(S.location_type_numeric == 0); v_nasal_all = v_nasal_all(~isnan(v_nasal_all));
+v_temporal_all = values(S.location_type_numeric == 1); v_temporal_all = v_temporal_all(~isnan(v_temporal_all));
+p_nt_ttest = NaN;
+if numel(v_nasal_all) >= 2 && numel(v_temporal_all) >= 2
+    [~, p_nt_ttest] = ttest2(v_nasal_all, v_temporal_all);
+end
+fprintf('[%s] Nasal vs Temporal (all cells): ttest2 p=%.4g\n', cfg.eval_target, p_nt_ttest);
+
+% Stats between temporal vs nasal within ON and within OFF
+fprintf('[%s] Stats (ttest2): ON temporal vs ON nasal\n', cfg.eval_target);
+[~, p_ONn_t_ttest] = ttest2(values(Ids{3}), values(Ids{4}));
+disp(p_ONn_t_ttest);
+
+fprintf('[%s] Stats (ttest2): OFF temporal vs OFF nasal\n', cfg.eval_target);
+[~, p_OFFn_t_ttest] = ttest2(values(Ids{5}), values(Ids{6}));
+disp(p_OFFn_t_ttest);
 
 %% ----------------------- Local helper functions -----------------------
 function [values, ylab, ylims, ytick] = resolve_eval_target(eval_target, TF_time2peak, TF_width, TF_biphasic_peaks, TF_biphasic_stregth, rf_pixels, avg_rad, elipse_ratio, surround_center, pixel_um)
@@ -405,7 +445,7 @@ function [values, ylab, ylims, ytick] = resolve_eval_target(eval_target, TF_time
     switch lower(eval_target)
         case 'area'
             values = rf_pixels * pixel_um^2; % um^2
-            ylims = [0 1.2e5];
+            ylims = [0 1.5e5];
             ytick = 0:6e4:1.2e5;
             ylab = 'RF area (\mum^2)';
         case 'diameter'
