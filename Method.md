@@ -375,6 +375,21 @@ This classification was used for grouping and comparisons throughout the downstr
 
 For each spot diameter $d$, we computed a response statistic (typically mean firing rate) during a fixed stimulus window. This yields a size-tuning curve $R(d)$ per cell.
 
+**Implementation details (code-based;** `SpotSizeAnalysis_simple.m`**).** For the simplified spot-size analysis used to generate summary figures and traces:
+
+- Input is loaded from `Results/Spots/SusAlpha_RawData.mat` into a struct `a` containing:
+	- `a.x1`: time axis (length $T$; units seconds).
+	- `a.y_labels`: spot diameter labels (units $\mu\mathrm{m}$).
+	- Group matrices `a.(groupName)` of size $T\times(n_{\mathrm{sizes}}\cdot n_{\mathrm{cells}})$ containing per-condition firing-rate traces.
+- For each group, the analysis computes a per-cell, per-size response by averaging each trace within a fixed index window `stim_idx` (on the `a.x1` time grid) and reshaping into an $n_{\mathrm{sizes}}\times n_{\mathrm{cells}}$ response matrix.
+- Polarity-specific response windows are selected by `test_type`:
+	- **ON:** `stim_idx = 110:300`
+	- **OFF:** `stim_idx = 310:500`
+- Default group sets used in this script (edited in the header as needed):
+	- **ON:** `{'AcuteZoneDT_ONSus_RF_GRN','DN_ONSus_RF_GRN','AcuteZoneDT_ONSus_RF_UV','DN_ONSus_RF_UV'}`
+	- **OFF:** `{'AcuteZoneDT_OFFSus_RF_GRN','DN_OFFSus_RF_GRN','AcuteZoneDT_OFFSus_RF_UV','DN_OFFSus_RF_UV'}`
+- Spot diameters are sorted ascending before all per-size computations.
+
 ### Size Index (SI)
 
 A simple center–surround suppression metric was computed from the size-tuning curve using two regimes:
@@ -389,6 +404,62 @@ $$
 $$
 
 Negative SI indicates suppression for large spots relative to the center response.
+
+**Implementation details (code-based;** `SpotSizeAnalysis_simple.m`**).** In this simplified pipeline, SI is the primary scalar summary of *surround modulation*.
+
+- Size categories (hard-coded in the script):
+	- “Center” pool is constrained to sizes **strictly less than** $800\ \mu\mathrm{m}$.
+	- “Large/surround” pool is set to $\{800,\ 1200\}\ \mu\mathrm{m}$.
+- For a given cell, define $r(d)$ as the mean firing rate within `stim_idx` for spot diameter $d$.
+- Surround/large response:
+
+$$
+S = \mathrm{mean}\big(\{r(d): d\in\{800,1200\}\}\big),
+$$
+
+excluding NaNs.
+
+- Center response $C$ is constructed from the *peak* within the small-size regime and the *largest adjacent* response (using only immediate neighboring sizes in the sorted size list):
+	1) Let $\mathcal{D}_{\mathrm{small}}=\{d: d<800\ \mu\mathrm{m}\}$.
+	2) Find the peak response within $\mathcal{D}_{\mathrm{small}}$: $r_{\max}=\max_{d\in\mathcal{D}_{\mathrm{small}}} r(d)$ at diameter $d_{\max}$.
+	3) Consider the immediately smaller and immediately larger sizes adjacent to $d_{\max}$ in the sorted list, keeping only those that are also $<800\ \mu\mathrm{m}$ and non-NaN.
+	4) Let $r_{\mathrm{adj}}$ be the larger of the available adjacent responses. Then
+
+$$
+C = \frac{r_{\max}+r_{\mathrm{adj}}}{2}.
+$$
+
+- SI is reported only when $C>0$:
+
+$$
+\mathrm{SI} = \frac{S-C}{C}.
+$$
+
+- Group-level summaries reported by the script:
+	- Mean SI and SEM across cells with valid SI.
+	- One-sample t-test vs 0 (per group).
+	- Two-sample t-test between groups when exactly two groups are supplied.
+
+### Response traces and summary figures (simplified pipeline)
+
+`SpotSizeAnalysis_simple.m` generates two complementary visualizations of spot-size responses:
+
+1) **Size-tuning curves (response vs diameter).** Using the $n_{\mathrm{sizes}}\times n_{\mathrm{cells}}$ matrix of per-size means $r(d)$:
+	 - Optionally plots **individual cell tuning curves** (each cell as a line across diameters) and overlays the **group mean $\pm$ SEM**.
+	 - Alternatively (when configured), plots **mean $\pm$ SEM** as a filled band for grouped conditions.
+	 - The plot annotates the size-category definitions by marking $800\ \mu\mathrm{m}$ (threshold) and the large sizes used for $S$.
+	 - The display mode is controlled by `show_individual_traces` (true = individual tuning curves; false = mean$\pm$SEM bands).
+
+2) **Center (C) vs surround (S) temporal traces.** For each cell, the script re-identifies the size indices used for $C$ (peak + adjacent, within $d<800\ \mu\mathrm{m}$) and uses the fixed large-size indices for $S$ (sizes $\in\{800,1200\}\ \mu\mathrm{m}$). It then computes per-time traces:
+
+$$
+r_C(t)=\mathrm{mean}_{d\in\mathcal{D}_C} r(t;d),\qquad
+r_S(t)=\mathrm{mean}_{d\in\mathcal{D}_S} r(t;d),
+$$
+
+and plots the **group mean $\pm$ SEM** across cells for both $r_C(t)$ and $r_S(t)$.
+
+All figures from this simplified analysis are saved under `./Figures/SpotSizeSimple/` as both `.png` and (for most plots) vector `.eps`.
 
 ### Parametric DoG-like fits of size tuning
 
@@ -407,6 +478,30 @@ A derived surround-to-center weight ratio is computed from the fitted parameters
 $$
 \mathrm{WR} = \frac{k_s\,\sigma_s^2}{k_c\,\sigma_c^2}.
 $$
+
+### “Optimal spot size” (simplified pipeline)
+
+In `SpotSizeAnalysis_simple.m`, “optimal spot size” is defined operationally as the **smallest diameter that reaches a fixed fraction of the peak firing rate** on a smooth (interpolated) version of the size-tuning curve.
+
+**Parameters (code-based):**
+
+- Fraction of peak: `percent_peak = 0.85` (i.e., 85% of peak).
+- Interpolation method: MATLAB `pchip` (shape-preserving, no overshoot).
+- Interpolation grid: uniform spacing `interp_resolution = 10` $\mu\mathrm{m}$ spanning $[\min(d),\max(d)]$.
+
+**Per-cell computation.** For each cell with at least 3 non-NaN size points:
+
+1) Interpolate $r(d)$ onto a dense grid $\tilde d$ using `pchip`.
+2) Compute peak response $r_{\mathrm{pk}}=\max\,\tilde r(\tilde d)$ and target response $r_{\mathrm{tgt}}=0.85\,r_{\mathrm{pk}}$.
+3) Define optimal diameter as
+
+$$
+d^* = \min\{\tilde d : \tilde r(\tilde d)\ge r_{\mathrm{tgt}}\}.
+$$
+
+Group-level summaries include mean $d^*$ and SEM across cells with valid $d^*$, along with range and median.
+
+**Statistical comparisons (code-based).** When exactly two groups are supplied, the script performs both a two-sample t-test (`ttest2`) and a Mann–Whitney U test (`ranksum`) on the per-cell optimal sizes.
 
 ### Bootstrap estimation of RF size parameters
 
