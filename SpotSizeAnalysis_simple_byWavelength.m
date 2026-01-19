@@ -8,9 +8,15 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-light_type = 'GRN';  % Set to 'GRN' or 'UV'
-percent_peak = 0.85;
-show_individual_traces = false;  % Set to true for individual cell traces, false for mean±SEM shaded plot
+if ~exist('light_type', 'var')
+    light_type = 'GRN';  % 'GRN' or 'UV'
+end
+if ~exist('percent_peak', 'var')
+    percent_peak = 0.85;
+end
+if ~exist('show_individual_traces', 'var')
+    show_individual_traces = false;  % true: individual tuning curves; false: mean±SEM shaded plot
+end
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple_byWavelength/';
@@ -1310,6 +1316,79 @@ for pair_idx = 1:numel(comparison_pairs)
     end
 end
 
+% ---------------- Combined (pooled) Comparisons: ON vs OFF, AcuteZoneDT vs DN ----------------
+% These comparisons pool across the two groups within each category.
+% Example for GRN:
+%   ON pool  = AcuteZoneDT_ONSus_RF_GRN + DN_ONSus_RF_GRN
+%   OFF pool = AcuteZoneDT_OFFSus_RF_GRN + DN_OFFSus_RF_GRN
+% and similarly for AcuteZoneDT vs DN pooling across ON+OFF.
+
+fprintf('\n========== COMBINED (POOLED) COMPARISONS (SI; %s) ==========', light_type);
+
+on_groups = {sprintf('AcuteZoneDT_ONSus_RF_%s', light_type), sprintf('DN_ONSus_RF_%s', light_type)};
+off_groups = {sprintf('AcuteZoneDT_OFFSus_RF_%s', light_type), sprintf('DN_OFFSus_RF_%s', light_type)};
+acute_groups = {sprintf('AcuteZoneDT_ONSus_RF_%s', light_type), sprintf('AcuteZoneDT_OFFSus_RF_%s', light_type)};
+dn_groups = {sprintf('DN_ONSus_RF_%s', light_type), sprintf('DN_OFFSus_RF_%s', light_type)};
+
+% Helper: collect SI values across multiple groups
+collect_si = @(names) vertcat(names{:}); %#ok<NASGU>
+
+on_SI = [];
+off_SI = [];
+acute_SI = [];
+dn_SI = [];
+
+for ii = 1:numel(on_groups)
+    gname = on_groups{ii};
+    if isfield(results, gname)
+        on_SI = [on_SI; results.(gname).SI_values(results.(gname).valid_SI)];
+    end
+end
+for ii = 1:numel(off_groups)
+    gname = off_groups{ii};
+    if isfield(results, gname)
+        off_SI = [off_SI; results.(gname).SI_values(results.(gname).valid_SI)];
+    end
+end
+for ii = 1:numel(acute_groups)
+    gname = acute_groups{ii};
+    if isfield(results, gname)
+        acute_SI = [acute_SI; results.(gname).SI_values(results.(gname).valid_SI)];
+    end
+end
+for ii = 1:numel(dn_groups)
+    gname = dn_groups{ii};
+    if isfield(results, gname)
+        dn_SI = [dn_SI; results.(gname).SI_values(results.(gname).valid_SI)];
+    end
+end
+
+% ON vs OFF (pooled)
+fprintf('\n\n--- ON vs OFF (pooled across AcuteZoneDT + DN) ---\n');
+fprintf('  ON pool:  n=%d, Mean SI=%.3f\n', numel(on_SI), mean(on_SI, 'omitnan'));
+fprintf('  OFF pool: n=%d, Mean SI=%.3f\n', numel(off_SI), mean(off_SI, 'omitnan'));
+if ~isempty(on_SI) && ~isempty(off_SI)
+    [~, p_ttest] = ttest2(on_SI, off_SI);
+    p_rs = ranksum(on_SI, off_SI);
+    fprintf('  t-test2: p = %.4f\n', p_ttest);
+    fprintf('  ranksum: p = %.4f\n', p_rs);
+else
+    fprintf('  Insufficient data for statistical comparison\n');
+end
+
+% AcuteZoneDT vs DN (pooled)
+fprintf('\n--- AcuteZoneDT vs DN (pooled across ON + OFF) ---\n');
+fprintf('  AcuteZoneDT pool: n=%d, Mean SI=%.3f\n', numel(acute_SI), mean(acute_SI, 'omitnan'));
+fprintf('  DN pool:          n=%d, Mean SI=%.3f\n', numel(dn_SI), mean(dn_SI, 'omitnan'));
+if ~isempty(acute_SI) && ~isempty(dn_SI)
+    [~, p_ttest] = ttest2(acute_SI, dn_SI);
+    p_rs = ranksum(acute_SI, dn_SI);
+    fprintf('  t-test2: p = %.4f\n', p_ttest);
+    fprintf('  ranksum: p = %.4f\n', p_rs);
+else
+    fprintf('  Insufficient data for statistical comparison\n');
+end
+
 % ---------------- Optimal Spot Size Analysis ----------------
 fprintf('\n========== OPTIMAL SPOT SIZE SUMMARY (%.0f%% of Peak) ==========\n', percent_peak*100);
 for g = 1:numel(groups)
@@ -1429,6 +1508,65 @@ for pair_idx = 1:numel(comparison_pairs)
     else
         fprintf('  Insufficient data for statistical comparison\n');
     end
+end
+
+% ---------------- Combined (pooled) Comparisons: ON vs OFF, AcuteZoneDT vs DN (Optimal Size) ----------------
+fprintf('\n========== COMBINED (POOLED) COMPARISONS (Optimal Size; %s, %.0f%% of Peak) ==========', light_type, percent_peak*100);
+
+on_opt = [];
+off_opt = [];
+acute_opt = [];
+dn_opt = [];
+
+for ii = 1:numel(on_groups)
+    gname = on_groups{ii};
+    if isfield(optimal_results, gname)
+        on_opt = [on_opt; optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal)];
+    end
+end
+for ii = 1:numel(off_groups)
+    gname = off_groups{ii};
+    if isfield(optimal_results, gname)
+        off_opt = [off_opt; optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal)];
+    end
+end
+for ii = 1:numel(acute_groups)
+    gname = acute_groups{ii};
+    if isfield(optimal_results, gname)
+        acute_opt = [acute_opt; optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal)];
+    end
+end
+for ii = 1:numel(dn_groups)
+    gname = dn_groups{ii};
+    if isfield(optimal_results, gname)
+        dn_opt = [dn_opt; optimal_results.(gname).optimal_sizes(optimal_results.(gname).valid_optimal)];
+    end
+end
+
+% ON vs OFF (pooled)
+fprintf('\n\n--- ON vs OFF (pooled across AcuteZoneDT + DN) ---\n');
+fprintf('  ON pool:  n=%d, Mean optimal size=%.1f μm\n', numel(on_opt), mean(on_opt, 'omitnan'));
+fprintf('  OFF pool: n=%d, Mean optimal size=%.1f μm\n', numel(off_opt), mean(off_opt, 'omitnan'));
+if ~isempty(on_opt) && ~isempty(off_opt)
+    [~, p_ttest] = ttest2(on_opt, off_opt);
+    p_rs = ranksum(on_opt, off_opt);
+    fprintf('  t-test2: p = %.4f\n', p_ttest);
+    fprintf('  ranksum: p = %.4f\n', p_rs);
+else
+    fprintf('  Insufficient data for statistical comparison\n');
+end
+
+% AcuteZoneDT vs DN (pooled)
+fprintf('\n--- AcuteZoneDT vs DN (pooled across ON + OFF) ---\n');
+fprintf('  AcuteZoneDT pool: n=%d, Mean optimal size=%.1f μm\n', numel(acute_opt), mean(acute_opt, 'omitnan'));
+fprintf('  DN pool:          n=%d, Mean optimal size=%.1f μm\n', numel(dn_opt), mean(dn_opt, 'omitnan'));
+if ~isempty(acute_opt) && ~isempty(dn_opt)
+    [~, p_ttest] = ttest2(acute_opt, dn_opt);
+    p_rs = ranksum(acute_opt, dn_opt);
+    fprintf('  t-test2: p = %.4f\n', p_ttest);
+    fprintf('  ranksum: p = %.4f\n', p_rs);
+else
+    fprintf('  Insufficient data for statistical comparison\n');
 end
 
 fprintf('\nAnalysis complete!\n');

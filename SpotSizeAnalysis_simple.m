@@ -8,9 +8,15 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-test_type = 'ON';
-percent_peak = 0.85;
-show_individual_traces = true;  % Set to true for individual cell traces, false for mean±SEM shaded plot
+if ~exist('test_type', 'var')
+    test_type = 'ON';
+end
+if ~exist('percent_peak', 'var')
+    percent_peak = 0.85;
+end
+if ~exist('show_individual_traces', 'var')
+    show_individual_traces = true;  % true: individual cell tuning curves; false: mean±SEM shaded plot
+end
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple/';
@@ -863,6 +869,36 @@ if numel(groups) == 2 && all(isfield(results, groups))
     end
 end
 
+% ---------------- Targeted AcuteZone vs DN Comparisons (SI) ----------------
+% In many runs we analyze 4 groups at once (GRN + UV), so the generic
+% "numel(groups)==2" comparison above will not run. This block always
+% attempts the key AcuteZone vs DN comparison when both groups are present.
+fprintf('\n========== TARGETED COMPARISON: ACUTEZONE vs DN (SI) ==========');
+
+si_pair_g1 = 'AcuteZoneDT_ONSus_RF_GRN';
+si_pair_g2 = 'DN_ONSus_RF_GRN';
+
+if isfield(results, si_pair_g1) && isfield(results, si_pair_g2)
+    g1_SI = results.(si_pair_g1).SI_values(results.(si_pair_g1).valid_SI);
+    g2_SI = results.(si_pair_g2).SI_values(results.(si_pair_g2).valid_SI);
+
+    fprintf('\n\n--- %s vs %s ---\n', si_pair_g1, si_pair_g2);
+    fprintf('  %s: n=%d, Mean SI=%.3f ± %.3f (SEM)\n', si_pair_g1, numel(g1_SI), results.(si_pair_g1).mean_SI, results.(si_pair_g1).sem_SI);
+    fprintf('  %s: n=%d, Mean SI=%.3f ± %.3f (SEM)\n', si_pair_g2, numel(g2_SI), results.(si_pair_g2).mean_SI, results.(si_pair_g2).sem_SI);
+
+    if ~isempty(g1_SI) && ~isempty(g2_SI)
+        [~, p_ttest] = ttest2(g1_SI, g2_SI);
+        p_rs = ranksum(g1_SI, g2_SI);
+        fprintf('  t-test2: p = %.4f\n', p_ttest);
+        fprintf('  ranksum: p = %.4f\n', p_rs);
+    else
+        fprintf('  Insufficient data for statistical comparison\n');
+    end
+else
+    fprintf('\n\n--- %s vs %s ---\n', si_pair_g1, si_pair_g2);
+    fprintf('  Skipping: one or both groups not present in this run\n');
+end
+
 % ---------------- Optimal Spot Size Analysis ----------------
 % Calculate optimal spot size (specified percentage of peak firing rate) for each group
 fprintf('\n========== OPTIMAL SPOT SIZE ANALYSIS (%.0f%% of Peak) ==========\n', percent_peak*100);
@@ -1270,6 +1306,33 @@ if numel(groups) == 2 && all(isfield(optimal_results, groups))
     else
         fprintf(' (n.s.)\n');
     end
+end
+
+% ---------------- Targeted AcuteZone vs DN Comparisons (Optimal Size) ----------------
+fprintf('\n========== TARGETED COMPARISON: ACUTEZONE vs DN (Optimal Size) ==========');
+
+opt_pair_g1 = 'AcuteZoneDT_ONSus_RF_GRN';
+opt_pair_g2 = 'DN_ONSus_RF_GRN';
+
+if isfield(optimal_results, opt_pair_g1) && isfield(optimal_results, opt_pair_g2)
+    g1_opt = optimal_results.(opt_pair_g1).optimal_sizes(optimal_results.(opt_pair_g1).valid_optimal);
+    g2_opt = optimal_results.(opt_pair_g2).optimal_sizes(optimal_results.(opt_pair_g2).valid_optimal);
+
+    fprintf('\n\n--- %s vs %s ---\n', opt_pair_g1, opt_pair_g2);
+    fprintf('  %s: n=%d, Mean optimal size=%.1f ± %.1f μm (SEM)\n', opt_pair_g1, numel(g1_opt), optimal_results.(opt_pair_g1).mean_optimal, optimal_results.(opt_pair_g1).sem_optimal);
+    fprintf('  %s: n=%d, Mean optimal size=%.1f ± %.1f μm (SEM)\n', opt_pair_g2, numel(g2_opt), optimal_results.(opt_pair_g2).mean_optimal, optimal_results.(opt_pair_g2).sem_optimal);
+
+    if ~isempty(g1_opt) && ~isempty(g2_opt)
+        [~, p_ttest] = ttest2(g1_opt, g2_opt);
+        p_rs = ranksum(g1_opt, g2_opt);
+        fprintf('  t-test2: p = %.4f\n', p_ttest);
+        fprintf('  ranksum: p = %.4f\n', p_rs);
+    else
+        fprintf('  Insufficient data for statistical comparison\n');
+    end
+else
+    fprintf('\n\n--- %s vs %s ---\n', opt_pair_g1, opt_pair_g2);
+    fprintf('  Skipping: one or both groups not present in this run\n');
 end
 
 fprintf('\nAnalysis complete!\n');
