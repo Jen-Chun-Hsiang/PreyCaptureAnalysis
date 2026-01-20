@@ -638,6 +638,90 @@ For moving-bar model evaluation, prediction performance is computed using a repe
 
 Performance was summarized across stimulus conditions and then aggregated across cells/groups.
 
+### Moving-bar processing + summary plots (code-grounded)
+
+This section documents the *specific scripts* and *parameter choices* used for moving-bar analysis and the group-averaged plots used in figures.
+
+#### Data products (what scripts read/write)
+
+- **Processed moving-bar responses (per recording):** `Results/MovingBar/<recording>_moving_bar_processed.mat`
+	- Produced by `DocumentEphys2StimulationData_MovingBar*.m`.
+	- Stores a response tensor `Data` indexed by condition dimensions and repeats/time.
+	- Condition axes are stored alongside the data as:
+		- `dim1_moving_direction`
+		- `dim2_contrast`
+		- `dim3_bar_width`
+		- `dim4_speeds`
+
+- **Model predictions (per recording):** `Results/MovingBar/<recording>_<...>_moving_bar_LN_simulated_*.mat`
+	- Produced by `CompareModelPrediction8Responses_MovingBar_separateData*.m` via `MovingBar_LinearNL_Simulation_steamline.m`.
+	- Includes center drive and surround drive predictions (commonly `resp` and `resp_s`).
+
+- **Fitted model performance + parameters (per recording):** `Results/MovingBar/<recording>_moving_bar_fitted.mat`
+	- Produced by `MovingBar_LinearNL_Fitting.m` (or dated variants).
+	- Contains:
+		- `BaselineCorr`: repeat reliability of the measured responses.
+		- `PredictionResults`: a vector of correlation coefficients for different models.
+			- In downstream summary plots, `PredictionResults(:,5)` is treated as **LN**.
+			- `PredictionResults(:,9)` is treated as **LN + surround** (labeled `LN_s` / “LNS” in figures).
+
+#### Grouping used in moving-bar summaries
+
+Moving-bar summaries are aggregated by **cell type** (ON vs OFF) and **retinal location** (Temporal vs Nasal). In the moving-bar summary script (`MovingBar_ONOFFalpha_Trace_Comparison.m`), these are encoded as logical masks:
+
+- `cell_type_numeric = strcmpi(cell_type, 'ON')`
+- `location_type_numeric = strcmpi(location, 'Temporal')`
+
+This yields four groups: ON-Temporal, ON-Nasal, OFF-Temporal, OFF-Nasal.
+
+#### Group-level correlation summary plots (repeat reliability vs model corr)
+
+`MovingBar_ONOFFalpha_Trace_Comparison.m` loads per-recording `BaselineCorr` and `PredictionResults`, and within each ON/OFF × location group:
+
+1) Sorts cells by repeat reliability (`BaselineCorr`, descending).
+2) Plots three curves versus cell index:
+	 - Repeat reliability (black)
+	 - LN correlation (blue; `PredictionResults(:,5)`)
+	 - LN+surround correlation (red; `PredictionResults(:,9)`, labeled `LN_s` / “LNS”)
+
+These plots correspond to the “Rep. Rel.” vs “LNS” style panels in figure summaries.
+
+#### Group-averaged moving-bar response traces (time-domain figures)
+
+The same script (`MovingBar_ONOFFalpha_Trace_Comparison.m`) also produces averaged time traces by:
+
+1) Selecting a specific condition (direction/contrast/bar width/speed).
+2) Averaging `Data(...)` across repeats to get a per-cell PSTH for that condition.
+3) Averaging across cells within each group and plotting mean ± SEM using `shadePlot`.
+
+**Parameters used for the 4-group (ON/OFF × Temporal/Nasal) trace figures.**
+
+The “within type-location Comparison (4 figures: ON-Temporal, ON-Nasal, OFF-Temporal, OFF-Nasal)” block uses:
+
+- Sampling / time axis
+	- `Fz = 100` Hz
+	- `max_t = 459` bins (time axis `ct = (0:max_t-1)/Fz`, i.e. 0–4.58 s)
+- Stimulus condition selection
+	- `disp_direction = 0`
+	- `disp_contrast = 0`
+	- `disp_bar_witdth = [800]`
+	- `disp_speeds = [1000 8000]`
+
+For each group and each speed, the script plots:
+
+- **Measured response**: group mean ± SEM of the repeat-averaged PSTHs.
+- **Model prediction overlay (when available):** a black mean ± SEM trace derived from fitted model outputs saved in the per-recording fitted files.
+
+Figures from this block are saved to `Figures/illustrator` as both `.eps` (vector) and `.png`.
+
+#### Nonparametric statistical comparison (per group)
+
+Within each of the four groups, we compare **repeat reliability** (`BaselineCorr`) vs **LN+surround correlation** (`PredictionResults(:,9)`), treating each cell as one paired observation.
+
+- Test: paired Wilcoxon signed-rank test (`signrank`, two-sided).
+- NaNs are removed pairwise before testing.
+- Output: saved as `Figures/MovingBarSummary/NonparametricComparison_RR_vs_LNs.mat`.
+
 ## Grouping and aggregation
 
 Cells were grouped by response polarity (ON vs OFF; defined from the step-spot ON vs OFF phase response during patching) and by retinal location categories (e.g., nasal vs temporal). For each fitted quantity (spatial RF size/ellipticity, temporal filter parameters, nonlinearity parameters, center–surround indices, moving-bar model parameters and performance), we computed group means and uncertainty estimates (e.g., SEM across cells), and compared groups using appropriate statistical tests when needed.

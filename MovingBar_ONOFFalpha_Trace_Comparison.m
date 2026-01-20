@@ -234,6 +234,65 @@ if is_show_fitted
         cell_type_numeric == 0 & location_type_numeric == 1; ... % OFF-Temporal
         cell_type_numeric == 0 & location_type_numeric == 0  ... % OFF-Nasal
     };
+
+    % ---- Nonparametric paired comparison: Repeat reliability vs LN+surround ----
+    % Each data point is a cell within each group.
+    % Uses Wilcoxon signed-rank test (signrank) on paired samples.
+    np_results = struct();
+    for g = 1:4
+        group_mask = group_indices{g};
+        base = Cbas(group_mask);
+        lns = Cdat(group_mask, 9); % 9th column plotted as LN_s in this script
+
+        valid = ~isnan(base) & ~isnan(lns);
+        base = base(valid);
+        lns = lns(valid);
+
+        res = struct();
+        res.group = groups{g};
+        res.n = numel(base);
+        res.median_repeat_reliability = median(base, 'omitnan');
+        res.median_LN_surround = median(lns, 'omitnan');
+        res.median_diff_LNsurround_minus_repeat = median(lns - base, 'omitnan');
+
+        if res.n >= 3
+            try
+                [p, h, stats] = signrank(lns, base); % two-sided by default
+                res.test = 'signrank (paired, two-sided)';
+                res.p = p;
+                res.h = h;
+                res.signedrank = getfield_safe(stats, 'signedrank');
+                res.zval = getfield_safe(stats, 'zval');
+            catch ME
+                res.test = 'signrank failed';
+                res.p = nan;
+                res.h = nan;
+                res.error = ME.message;
+            end
+        else
+            res.test = 'signrank skipped (n<3)';
+            res.p = nan;
+            res.h = nan;
+        end
+
+        np_results.(matlab.lang.makeValidName(groups{g})) = res;
+    end
+
+    fprintf('\n=== NONPARAMETRIC PAIRED COMPARISON: Repeat reliability vs LN+surround ===\n');
+    for g = 1:4
+        key = matlab.lang.makeValidName(groups{g});
+        res = np_results.(key);
+        fprintf('%s: n=%d, median(RR)=%.3f, median(LN_s)=%.3f, median(diff)=%.3f, p=%g\n', ...
+            res.group, res.n, res.median_repeat_reliability, res.median_LN_surround, res.median_diff_LNsurround_minus_repeat, res.p);
+    end
+
+    % Save stats next to other summary outputs
+    try
+        save(fullfile(save_fig_folder, 'NonparametricComparison_RR_vs_LNs.mat'), 'np_results');
+    catch
+        % If save_fig_folder is not writable for some reason, fall back to CWD
+        save('NonparametricComparison_RR_vs_LNs.mat', 'np_results');
+    end
     
     % Figure for Cdat and Cbas
     figure('Name', 'Model Performance Comparison');
