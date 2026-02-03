@@ -42,3 +42,5 @@ fprintf('ON-nasal:    %d\n', numel(ON_nasal_idx));
 fprintf('OFF-temporal: %d\n', numel(OFF_temporal_idx));
 fprintf('OFF-nasal:   %d\n', numel(OFF_nasal_idx));
 
+save(processedFile, 'gauss_est_ON_temporal', 'gauss_est_ON_nasal', 'gauss_est_OFF_temporal', 'gauss_est_OFF_nasal', '-append');
+save(processedFile, 'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');

@@ -291,7 +291,7 @@ if strcmpi(cfg.eval_target, 'tfbiphasicstregth')
     fprintf('\n[%s] %s Nasal vs Temporal: ttest2 p=%.4g\n', ...
         cfg.eval_target, Disp_Type, p_biphasy_loc_ttest);
 end
-
+keyboard
 %% ----------------------- Bar plot + stats for selected eval_target -----------------------
 Ids = cell(6,1);
 Ids{1} = S.cell_type_numeric == 1;
@@ -302,6 +302,14 @@ Ids{5} = S.cell_type_numeric == 0 & S.location_type_numeric == 1;
 Ids{6} = S.cell_type_numeric == 0 & S.location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
+
+% --- Verify group membership is deterministic (important for debugging inconsistent plots) ---
+fprintf('\n=== GROUP MEMBERSHIP VERIFICATION (for %s) ===\n', cfg.eval_target);
+for gi = 3:6
+    idx_in_group = find(Ids{gi});
+    fprintf('%s: n=%d, cell indices=[%s]\n', barlabels{gi}, numel(idx_in_group), ...
+        mat2str(idx_in_group));
+end
 
 % ---- RF geometry metrics (loaded from processed file; computed only if needed) ----
 gauss_est = [];
@@ -325,6 +333,33 @@ if isfield(S, 'rf_pixels')
     rf_pixels = S.rf_pixels;
 end
 
+% ---- Alignment guard: ensure gauss_est/rf_pixels rows match cfg.data_sets order ----
+% This matters for eval_target='area' because rf_pixels can be computed from
+% Data{k}.stdSTA paired with gauss_est(k,:). If the processed file's ordering
+% differs from cfg.data_sets, results can be wrong (and appear inconsistent
+% across runs if different processed files or cfg lists are used).
+if hasProcessed && isfield(S, 'data_sets') && ~isempty(S.data_sets)
+    if ~isequal(S.data_sets(:), cfg.data_sets(:))
+        [tf_in_S, idx_in_S] = ismember(cfg.data_sets, S.data_sets);
+        if ~all(tf_in_S)
+            missing = cfg.data_sets(~tf_in_S);
+            warning('WhiteNoise:DatasetMismatch', 'Some cfg.data_sets are missing in processed file (first few): %s', strjoin(missing(1:min(5,numel(missing))), ', '));
+        end
+
+        if ~isempty(gauss_est)
+            gauss_est_aligned = nan(numel(cfg.data_sets), size(gauss_est, 2));
+            gauss_est_aligned(tf_in_S, :) = gauss_est(idx_in_S(tf_in_S), :);
+            gauss_est = gauss_est_aligned;
+        end
+
+        if ~isempty(rf_pixels)
+            rf_pixels_aligned = nan(numel(cfg.data_sets), 1);
+            rf_pixels_aligned(tf_in_S) = rf_pixels(idx_in_S(tf_in_S));
+            rf_pixels = rf_pixels_aligned;
+        end
+    end
+end
+
 % Enforce required fields for RF-geometry targets (avoid silent all-NaN outputs)
 if any(strcmpi(cfg.eval_target, {'diameter','ellipse','surround_center'})) && isempty(gauss_est)
     error(['eval_target="' cfg.eval_target '" requires gauss_est in the processed file. ' ...
@@ -341,6 +376,8 @@ if strcmpi(cfg.eval_target, 'area') && isempty(rf_pixels)
     end
     rf_pixels = compute_rf_pixels_from_gauss(Data, gauss_est, cfg.rf_threshold_std_plus);
 
+    fprintf('Computed rf_pixels from gauss_est+stdSTA (std_plus=%g). checksum(sum)=%g\n', cfg.rf_threshold_std_plus, sum(rf_pixels, 'omitnan'));
+
     % Only append to disk if explicitly allowed.
     if (~hasProcessed) || cfg.allow_append_missing_fields_to_loaded_processed
         try
@@ -354,9 +391,26 @@ if strcmpi(cfg.eval_target, 'area') && isempty(rf_pixels)
     end
 end
 
+if strcmpi(cfg.eval_target, 'area') && ~isempty(rf_pixels)
+    rf_source = 'computed';
+    if hasProcessed && isfield(S, 'rf_pixels')
+        rf_source = 'loaded';
+    end
+    fprintf('Using rf_pixels (%s). checksum(sum)=%g\n', rf_source, sum(rf_pixels, 'omitnan'));
+end
+
 [values, ylab, ylims, ytick] = resolve_eval_target(cfg.eval_target, ...
     TF_time2peak, TF_width, TF_biphasic_peaks, TF_biphasic_stregth, ...
     rf_pixels, avg_rad, elipse_ratio, surround_center, cfg.pixel_um);
+
+%% ----------------------- Verify y-values are deterministic per group -----------------------
+fprintf('\n=== Y-VALUE CHECKSUMS (for %s) ===\n', cfg.eval_target);
+for gi = 3:6
+    v = values(Ids{gi});
+    v_clean = v(~isnan(v));
+    fprintf('%s: n=%d (after removing NaN), checksum(sum)=%.12g, checksum(mean)=%.12g\n', ...
+        barlabels{gi}, numel(v_clean), sum(v_clean), mean(v_clean));
+end
 
 %% ----------------------- Console summary stats -----------------------
 fprintf('\n[%s] Summary stats by group (mean, std)\n', cfg.eval_target);
@@ -397,6 +451,7 @@ b.EdgeColor = 'w';
 b.CData = Colors(selection, :);
 errorbar(selection, Davg(selection), Dsem(selection), 'vertical', '|k', 'CapSize', 0');
 
+% Note: x_jitter below is random (for visual separation), but y-values (vals) are deterministic
 for i = 1:numel(selection)
     idx = selection(i);
     vals = values(Ids{idx});
@@ -445,7 +500,7 @@ function [values, ylab, ylims, ytick] = resolve_eval_target(eval_target, TF_time
     switch lower(eval_target)
         case 'area'
             values = rf_pixels * pixel_um^2; % um^2
-            ylims = [0 1.5e5];
+            ylims = [0 2.0e5];
             ytick = 0:6e4:1.2e5;
             ylab = 'RF area (\mum^2)';
         case 'diameter'

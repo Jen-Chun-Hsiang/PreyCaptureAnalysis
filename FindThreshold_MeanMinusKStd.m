@@ -4,7 +4,7 @@
 % The threshold is then reported for each image.
 
 % --- User settings ---
-std_plus = 2; % Number of standard deviations below the mean
+std_plus = 1.5; % Number of standard deviations below the mean
 num_gauss = 1; % Number of Gaussians used in fitting
 
 % --- Load processed results ---
@@ -59,9 +59,5 @@ rf_pixels*4.375^2
 mean(rf_pixels*4.375^2)
 mean(sqrt(rf_pixels*4.375^2*4/pi))
 processedFile = fullfile(folder_name, process_version);
-if exist(processedFile, 'file')
-    save(processedFile, 'rf_pixels', '-append');
-end
 
-% Save thresholds
-% save('Thresholds_MeanMinusKStd.mat', 'thresholds', 'k');
+save(processedFile, 'rf_pixels', '-append');

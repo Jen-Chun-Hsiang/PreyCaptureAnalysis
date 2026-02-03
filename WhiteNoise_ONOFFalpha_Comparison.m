@@ -16,8 +16,8 @@ location =  {'Temporal', 'Temporal','Nasal',   'Nasal',    'Nasal',   'Nasal',  
              'Temporal', 'Temporal','Temporal','Temporal', 'Temporal','Temporal','Temporal', 'Temporal',...
              'Temporal',...
              };
-
-process_version = 'GaussianFitting_processed_011526_1.mat';
+process_version = 'GaussianFitting_processed_082225_1.mat';
+is_overwrite = false; % Whether to overwrite existing processed files
 is_normalized_tf = 1;
 save_folder = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
 if ~exist(save_folder, 'dir')
@@ -57,7 +57,7 @@ for i = 1:length(data_sets)
     expectedLoc = location{i};
     if (strcmpi(expectedLoc, 'Temporal') && ~strcmpi(excelLoc, 'T')) || ...
        (strcmpi(expectedLoc, 'Nasal') && ~strcmpi(excelLoc, 'N'))
-        error(printf('Location mismatch for %s: data_sets=%s, Excel=%s\n', ds, expectedLoc, excelLoc));
+        error('Location mismatch for %s: data_sets=%s, Excel=%s', ds, expectedLoc, excelLoc);
     end
     fprintf('Checked %s: Type=%s, Location=%s PASS \n', ds, excelType, excelLoc);
 end
@@ -65,6 +65,7 @@ end
 clear Data
 num_set = length(data_sets);
 folder_name = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\MovingWhite';
+processedFile = fullfile(folder_name, process_version);
 for i = 1:num_set
     file_name = sprintf('%s.mat', data_sets{i});
     Data{i} = load(fullfile(folder_name, file_name), 'stdSTA', 'tRF');
@@ -80,83 +81,108 @@ numeric_values = cellfun(@str2double, numeric_parts);
 [date_value, ~, date_ids] = unique(numeric_values);
 location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
 cell_type_numeric = cellfun(@(x) strcmp(x, 'ON'), cell_type);
+
+% Persist minimal metadata needed to resume from processedFile later
+if exist('processedFile', 'var')
+    if exist(processedFile, 'file')
+        save(processedFile, ...
+            'data_sets', 'cell_type', 'location', 'folder_name', 'process_version', ...
+            'num_set', 'Fz', 'WinT', 'is_normalized_tf', ...
+            'numeric_values', 'date_value', 'date_ids', ...
+            'location_type_numeric', 'cell_type_numeric', ...
+            '-append');
+    else
+        save(processedFile, ...
+            'data_sets', 'cell_type', 'location', 'folder_name', 'process_version', ...
+            'num_set', 'Fz', 'WinT', 'is_normalized_tf', ...
+            'numeric_values', 'date_value', 'date_ids', ...
+            'location_type_numeric', 'cell_type_numeric');
+    end
+end
 %%
 GetWhiteNoise_Nonlinearity
 visualize_nonlinear_curve
+
+% Persist NL outputs (needed for plotting/stats when skipping earlier steps)
+if exist('processedFile', 'var')
+    nl_vars = {};
+    if exist('NL_curves', 'var'); nl_vars{end+1} = 'NL_curves'; end
+    if exist('NL_params', 'var'); nl_vars{end+1} = 'NL_params'; end
+    if exist('x_sample_range', 'var'); nl_vars{end+1} = 'x_sample_range'; end
+    if ~isempty(nl_vars)
+        if exist(processedFile, 'file')
+            save(processedFile, nl_vars{:}, '-append');
+        else
+            save(processedFile, nl_vars{:});
+        end
+    end
+end
+
+disp('End of AA')
 keyboard;
 
 
 %% Skip process to section [AA] for loading data
-%% show difference in temporal filter
+%% [AA] section START
 
+ct = t(2:end);
+Trace = nan(num_set,  length(ct));
 
-
-% Check if processed file exists before running spatial receptive field fitting
-processedFile = fullfile(folder_name, process_version);
-if exist(processedFile, 'file')
-    disp('Processed file found. Loading instead of rerunning fitting.');
-    load(processedFile);
-else
-    ct = t(2:end);
-    Trace = nan(num_set,  length(ct));
-
-    save_tf_folder = fullfile(save_folder, 'TF_Fits');
-    if ~exist(save_tf_folder, 'dir')
-        mkdir(save_tf_folder);
-    end
-    x = 1:length(ct);
-    figure; hold on
-    for k = 1:num_set
-        clc
-        fprintf('Processing %s... %d/%d \n', data_sets{k}, k, num_set);
-        csig = Data{k}.tRF;
-        if is_normalized_tf
-            csig = csig./max(abs(csig));
-        end
-        OptW = GaussianTemporalFilter2(csig');
-
-        tf = gaussmf(x, [OptW(1) OptW(3)])*OptW(5) - gaussmf(x, [OptW(2) OptW(4)])*(OptW(6)*OptW(5)) + OptW(7);
-
-        if k == 1
-            Gauss_TF_est = nan(num_set, length(OptW));
-        end
-        Gauss_TF_est(k, :) = OptW;
-        % switch lower(cell_type{k})
-        %     case 'on'
-        %         plot(ct, csig, 'Color', [247, 224, 12]/255);
-        %     case 'off'
-        %         plot(ct, csig, 'Color', 0.4*ones(1, 3));
-        % end
-        Trace(k, :) = csig;
-
-        figure('Visible','off'); hold on
-        plot(ct, csig, 'k', 'LineWidth', 1.5); % normalized csig
-        plot(ct, tf, 'r--', 'LineWidth', 1.5); % fitted tf
-        legend('Normalized csig', 'Fitted TF');
-        xlabel('Time (s)');
-        ylabel('Normalized Value');
-        title(sprintf('TF Fit: %s (%s, %s)', data_sets{k}, cell_type{k}, location{k}));
-        set(gca, 'Box', 'off');
-        saveas(gcf, fullfile(save_tf_folder, sprintf('TFfit_%s.png', data_sets{k})));
-        close(gcf);
-    end
-    h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==1, :), 1)), 'Color', [245 182 66]/255, 'LineWidth', 2);
-    h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==0, :), 1)), 'Color', 0*ones(1, 3), 'LineWidth', 2);
-    xlabel('Time (s)');
-    xticks(-0.5:0.25:0)
-    xticklabels({'-0.5', '0.25', '0'});
-    if is_normalized_tf
-        yticks(-1:0.5:1)
-        yticklabels({'-1', '', '0', '', '1'});
-    else
-        yticks(-100:50:100)
-        yticklabels({'-100', '', '0', '', '100'});
-    end
-    ylabel('Average stimulus value');
-    legend([h1, h2], 'ON', 'OFF');
-    keyboard;
+save_tf_folder = fullfile(save_folder, 'TF_Fits');
+if ~exist(save_tf_folder, 'dir')
+    mkdir(save_tf_folder);
 end
-%%
+x = 1:length(ct);
+figure; hold on
+for k = 1:num_set
+    clc
+    fprintf('Processing %s... %d/%d \n', data_sets{k}, k, num_set);
+    csig = Data{k}.tRF;
+    if is_normalized_tf
+        csig = csig./max(abs(csig));
+    end
+    OptW = GaussianTemporalFilter2(csig');
+
+    tf = gaussmf(x, [OptW(1) OptW(3)])*OptW(5) - gaussmf(x, [OptW(2) OptW(4)])*(OptW(6)*OptW(5)) + OptW(7);
+
+    if k == 1
+        Gauss_TF_est = nan(num_set, length(OptW));
+    end
+    Gauss_TF_est(k, :) = OptW;
+    % switch lower(cell_type{k})
+    %     case 'on'
+    %         plot(ct, csig, 'Color', [247, 224, 12]/255);
+    %     case 'off'
+    %         plot(ct, csig, 'Color', 0.4*ones(1, 3));
+    % end
+    Trace(k, :) = csig;
+
+    figure('Visible','off'); hold on
+    plot(ct, csig, 'k', 'LineWidth', 1.5); % normalized csig
+    plot(ct, tf, 'r--', 'LineWidth', 1.5); % fitted tf
+    legend('Normalized csig', 'Fitted TF');
+    xlabel('Time (s)');
+    ylabel('Normalized Value');
+    title(sprintf('TF Fit: %s (%s, %s)', data_sets{k}, cell_type{k}, location{k}));
+    set(gca, 'Box', 'off');
+    saveas(gcf, fullfile(save_tf_folder, sprintf('TFfit_%s.png', data_sets{k})));
+    close(gcf);
+end
+h1 = plot(ct, squeeze(mean(Trace(cell_type_numeric==1, :), 1)), 'Color', [245 182 66]/255, 'LineWidth', 2);
+h2 = plot(ct, squeeze(mean(Trace(cell_type_numeric==0, :), 1)), 'Color', 0*ones(1, 3), 'LineWidth', 2);
+xlabel('Time (s)');
+xticks(-0.5:0.25:0)
+xticklabels({'-0.5', '0.25', '0'});
+if is_normalized_tf
+    yticks(-1:0.5:1)
+    yticklabels({'-1', '', '0', '', '1'});
+else
+    yticks(-100:50:100)
+    yticklabels({'-100', '', '0', '', '100'});
+end
+ylabel('Average stimulus value');
+legend([h1, h2], 'ON', 'OFF');
+   
 
 
 %%
@@ -170,6 +196,8 @@ TF_width = nan(num_set, 1);
 TF_biphasic_peaks = nan(num_set, 1);
 TF_biphasic_stregth = nan(num_set, 1);
 hwith_thr = 0.5;
+
+
 nt = size(Trace, 2);
 for i = 1:num_set
     csig = Data{i}.tRF(:)';
@@ -194,6 +222,33 @@ for i = 1:num_set
         TF_biphasic_stregth(i) = Gauss_TF_est(i, 5)./Gauss_TF_est(i, 6);
     end
     TF_width(i) = sum(csig_thr)*(1/Fz)*nt;
+end
+
+% Persist TF-derived metrics for later replotting/statistics
+if ~exist('processedFile', 'var')
+    if exist('folder_name', 'var') && exist('process_version', 'var')
+        processedFile = fullfile(folder_name, process_version);
+    end
+end
+
+if exist(processedFile, 'file')
+    save(processedFile, 'TF_time2peak', 'TF_width', 'TF_biphasic_peaks', 'TF_biphasic_stregth', '-append');
+else
+    % Create processedFile now; later writes should use -append to avoid overwriting these.
+    save(processedFile, 'TF_time2peak', 'TF_width', 'TF_biphasic_peaks', 'TF_biphasic_stregth');
+end
+
+% Persist TF fit outputs used by downstream plotting (so skipping [AA] works)
+tf_fit_vars = {};
+if exist('Gauss_TF_est', 'var'); tf_fit_vars{end+1} = 'Gauss_TF_est'; end
+if exist('ct', 'var'); tf_fit_vars{end+1} = 'ct'; end
+if exist('Trace', 'var'); tf_fit_vars{end+1} = 'Trace'; end
+if ~isempty(tf_fit_vars)
+    if exist(processedFile, 'file')
+        save(processedFile, tf_fit_vars{:}, '-append');
+    else
+        save(processedFile, tf_fit_vars{:});
+    end
 end
 
 %% 
@@ -255,19 +310,27 @@ x = biphase(locs==0);
 y = biphase(locs==1);
 % p = ranksum(biphase(locs==0),biphase(locs==1));
 [~, p] = ttest2(x, y)
-%%
-keyboard
 
+
+%% [AA] section END
 %% [AA] save data given a time stamp of processing
 
-process_version = 'GaussianFitting_processed_082025_1.mat';
 
 % Check if processed file exists before running spatial receptive field fitting
 processedFile = fullfile(folder_name, process_version);
-if exist(processedFile, 'file')
-    disp('Processed file found. Loading instead of rerunning fitting.');
-    load(processedFile);
-else
+if ~exist(processedFile, 'file')
+    error('processedFile not found: %s. Run [AA] once to generate it.', processedFile);
+end
+load(processedFile);
+
+% Quick sanity check: variables expected for downstream plotting/stats
+resume_required = {'cell_type_numeric','location_type_numeric','data_sets','cell_type','location', ...
+    'TF_time2peak','TF_width','TF_biphasic_peaks','TF_biphasic_stregth'};
+resume_missing = resume_required(~cellfun(@(v) exist(v, 'var') == 1, resume_required));
+if ~isempty(resume_missing)
+    warning('processedFile loaded but is missing: %s', strjoin(resume_missing, ', '));
+end
+if is_overwrite
     % Run spatial receptive field fitting with bounds
     num_gauss = 1;
     image = Data{1}.stdSTA';
@@ -301,32 +364,32 @@ else
         assert(length(cell_type_numeric) >= k, 'cell_type_numeric missing entry at index %d', k);
         assert(length(location_type_numeric) >= k, 'location_type_numeric missing entry at index %d', k);
     end
-    save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace', 'location_type_numeric', 'data_sets',...
-        'cell_type_numeric', 'cell_type', 'location');
+    if exist(processedFile, 'file')
+        save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace', 'location_type_numeric', 'data_sets',...
+            'cell_type_numeric', 'cell_type', 'location', '-append');
+    else
+        save(processedFile, 'gauss_est', 'Gauss_TF_est', 'ct', 'Trace', 'location_type_numeric', 'data_sets',...
+            'cell_type_numeric', 'cell_type', 'location');
+    end
     % Save split group variables to the same file, appending
     split_gauss_groups
-    if exist('gauss_est_ON_temporal', 'var')
-        save(processedFile, 'gauss_est_ON_temporal', 'gauss_est_ON_nasal', 'gauss_est_OFF_temporal', 'gauss_est_OFF_nasal', ...
-            'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');
-    end
-end
-if exist('NL_curves', 'var')
+    
+    save(processedFile, 'gauss_est_ON_temporal', 'gauss_est_ON_nasal', 'gauss_est_OFF_temporal', 'gauss_est_OFF_nasal', ...
+        'Gauss_TF_est_ON_temporal', 'Gauss_TF_est_ON_nasal', 'Gauss_TF_est_OFF_temporal', 'Gauss_TF_est_OFF_nasal', '-append');
     save(processedFile, 'NL_curves', 'NL_params', '-append');
+    split_est_parameter_by_celltype
+    %%
+
+    elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
+    avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
+    surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
+    save(processedFile, 'elipse_ratio', 'avg_rad', 'surround_center', '-append');
+    %% Get area size 
+    FindThreshold_MeanMinusKStd
 end
 
-split_est_parameter_by_celltype
 
 
-%%
-
-elipse_ratio = min(gauss_est(:, 3:4), [], 2)./max(gauss_est(:, 3:4), [], 2);
-% avg_rad = sqrt(gauss_est(:, 3).^2 + gauss_est(:, 4).^2)*1.5*4.375;
-avg_rad = 2*sqrt(gauss_est(:, 3).*gauss_est(:, 4))*2*4.375;
-surround_center = abs(gauss_est(:, 10)./gauss_est(:, 7));
-%%
-keyboard;
-%% Get area size 
-FindThreshold_MeanMinusKStd
 %%
 clc
 Colors = lines(6); %
@@ -340,6 +403,7 @@ Ids{6} = cell_type_numeric == 0 & location_type_numeric == 0;
 barlabels = {'ON', 'OFF', 'ON-temporal', 'ON-nasal', 'OFF-temporal', 'OFF-nasal'};
 num_n = cellfun(@sum, Ids);
 eval_target = 'area';
+clear ylims
 switch lower(eval_target)
     case 'nl_baseline'
         zero_id = find(x_sample_range==0);
@@ -357,8 +421,8 @@ switch lower(eval_target)
         ylab = 'NL slope';
     case 'area'
         values = rf_pixels*4.375^2; % in um^2
-        ylims = [0 1.2e5];
-        ytick = 0:6e4:1.2e5;
+        ylims = [0 1.8e5];
+        ytick = 0:9e4:1.8e5;
         ylab = 'RF area (\mum^2)';
     case 'diameter'
         values = avg_rad;
@@ -448,10 +512,56 @@ end
 xlim([2.5 6.5]);
 %%
 keyboard
+
 %%
 save_file_name = fullfile(save_folder, sprintf('BarPlot_RF%s_%s', eval_target, process_version(1:end-4)));
 print(gcf, save_file_name, '-depsc', '-painters'); % EPS format
 print(gcf, save_file_name, '-dpng', '-r300'); % PNG, 600 dpi
+%% Save data for reploting and stats later
+plot_data_save_folder ='\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Results\Plot_figure';
+if ~exist(plot_data_save_folder, 'dir')
+    mkdir(plot_data_save_folder);
+end
+plot_data_file = fullfile(plot_data_save_folder, sprintf('PlotData_RF%s_%s.mat', eval_target, process_version(1:end-4)));
+
+% --- minimal, self-contained payload to reproduce plot + stats later ---
+plot_ylab = '';
+if exist('ylab', 'var')
+    plot_ylab = ylab;
+end
+plot_ylims = [];
+if exist('ylims', 'var')
+    plot_ylims = ylims;
+end
+plot_ytick = [];
+if exist('ytick', 'var')
+    plot_ytick = ytick;
+end
+plot_selection = selection;
+plot_xticlab = xticlab;
+plot_colors = Colors;
+plot_xlim = [2.5 6.5];
+plot_jitter_amp = 0.15;
+plot_marker_size = 40;
+plot_marker_color = 0.3*ones(1, 3);
+
+% Save the exact tests used in this script section (ON-temporal vs ON-nasal; OFF-temporal vs OFF-nasal)
+stats = struct();
+try
+    stats.p_ranksum_ON_temporal_vs_nasal = ranksum(values(Ids{3}), values(Ids{4}));
+    stats.p_ranksum_OFF_temporal_vs_nasal = ranksum(values(Ids{5}), values(Ids{6}));
+    [~, stats.p_ttest2_ON_temporal_vs_nasal] = ttest2(values(Ids{3}), values(Ids{4}));
+    [~, stats.p_ttest2_OFF_temporal_vs_nasal] = ttest2(values(Ids{5}), values(Ids{6}));
+catch
+    % If stats functions are unavailable in a future environment, keep plotting data usable.
+end
+
+save(plot_data_file, ...
+    'values', 'Ids', 'barlabels', 'num_n', 'Davg', 'Dsem', 'eval_target', ...
+    'process_version', ...
+    'plot_ylab', 'plot_ylims', 'plot_ytick', 'plot_selection', 'plot_xticlab', 'plot_colors', 'plot_xlim', ...
+    'plot_jitter_amp', 'plot_marker_size', 'plot_marker_color', ...
+    'stats');
 
 %%
 Colors = parula(num_date);
