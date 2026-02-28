@@ -3,6 +3,12 @@ close all; clear; clc;
 set_name = 'latest';  % before081425
 is_show_fitted = 1;
 
+%% ============ USER PARAMETERS ============
+Disp_Type = 'ON';  % 'ON' or 'OFF' - cell type to display in "within type Comparison" 5x5 grid figure
+is_show_rf_edge_timeline = true;  % Add dashed vertical lines for bar-edge entry/exit at RF center
+rf_center_diameter_um = 300;
+moving_bar_startposition_um = 500; % IN.startposition in StageVSS script (um)
+
 % d101924 unlikely to be OFF temporal, responses is very quick to sustained parts
 
 switch set_name
@@ -633,7 +639,7 @@ for i = 1:length(disp_contrast)
             ylabel('Firing rate (spike/s)')
         end
     end
-    sgtitle(sprintf('Direction: %d  Contrast: %0.2G', disp_direction, 1-disp_contrast));
+    sgtitle(sprintf('ON vs OFF Comparison - Grid: Bar Width (rows) × Speed (cols)\nDirection: %d  Contrast: %0.2G', disp_direction, 1-disp_contrast));
 end
 
 %% within type Comparison
@@ -643,16 +649,33 @@ disp_contrast = 0;
 disp_bar_witdth = [50, 100, 200, 400, 800];  % [50, 100, 200, 400, 800]
 disp_speeds = [500, 1000, 2000, 4000, 8000]; % [500, 1000, 2000, 4000, 8000]
 max_t = 459;
-Disp_Type = 'ON';
 
 cell_type_id = strcmpi(Disp_Type, 'ON');
 
 ct = (0:max_t-1)/Fz;
 Colors = parula(4);
 location_type_numeric = cellfun(@(x) strcmp(x, 'Temporal'), location);
+
+if strcmpi(Disp_Type, 'ON')
+    temporal_mean_color = [180 0 180]/255;
+    nasal_mean_color = [120 0 120]/255;
+else
+    temporal_mean_color = [0 180 0]/255;
+    nasal_mean_color = [0 120 0]/255;
+end
+lighten_factor = 0.5;
+temporal_ind_color = temporal_mean_color + lighten_factor*(1 - temporal_mean_color);
+nasal_ind_color = nasal_mean_color + lighten_factor*(1 - nasal_mean_color);
+
+rf_radius_um = rf_center_diameter_um/2;
+save_folder_fig2 = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
+if ~exist(save_folder_fig2, 'dir')
+    mkdir(save_folder_fig2);
+end
+
 for i = 1:length(disp_contrast)
     Trace = nan(length(disp_bar_witdth), length(disp_speeds), num_set, max_t);
-    figure;
+    figure('Color', 'w', 'Position', [100, 80, 1350, 950]);
     for j = 1:length(disp_bar_witdth)
         for q = 1:length(disp_speeds)
             subplot(length(disp_bar_witdth), length(disp_speeds), (j-1)*length(disp_speeds)+q); hold on
@@ -667,24 +690,60 @@ for i = 1:length(disp_contrast)
                 if strcmpi(cell_type{k}, Disp_Type)
                     switch lower(location{k})
                         case 'temporal'
-                            plot(ct, csig(1:max_t), 'Color', [180 0 180]/255);
+                            plot(ct, csig(1:max_t), 'Color', temporal_ind_color, 'LineWidth', 0.8);
                         case 'nasal'
-                            plot(ct, csig(1:max_t), 'Color', [120 0 120]/255);
+                            plot(ct, csig(1:max_t), 'Color', nasal_ind_color, 'LineWidth', 0.8);
                     end
                 end
             end
             gids_1 = cell_type_numeric==cell_type_id & location_type_numeric == 1;
             gids_2 = cell_type_numeric==cell_type_id & location_type_numeric == 0;
-            plot(ct, squeeze(mean(Trace(j, q, gids_1, :), 3)), 'Color', [180 0 180]/255, 'LineWidth', 2)
-            plot(ct, squeeze(mean(Trace(j, q, gids_2, :), 3)), 'Color', [120 0 120]/255, 'LineWidth', 2)
+            plot(ct, squeeze(mean(Trace(j, q, gids_1, :), 3)), 'Color', temporal_mean_color, 'LineWidth', 2.5)
+            plot(ct, squeeze(mean(Trace(j, q, gids_2, :), 3)), 'Color', nasal_mean_color, 'LineWidth', 2.5)
+
+            if is_show_rf_edge_timeline
+                bar_center_start_um = moving_bar_startposition_um + 0.5*disp_bar_witdth(j);
+                edge_offset_um = rf_radius_um + 0.5*disp_bar_witdth(j);
+                t_edge_enter = (bar_center_start_um - edge_offset_um) / disp_speeds(q);
+                t_edge_exit = (bar_center_start_um + edge_offset_um) / disp_speeds(q);
+                xline(t_edge_enter, '--', 'Color', 0.2*[1 1 1], 'LineWidth', 1.1);
+                xline(t_edge_exit, '--', 'Color', 0.2*[1 1 1], 'LineWidth', 1.1);
+            end
+
             ylim([0 250]);
-            xlim([ct(1) ct(end)]);
-            xlabel('Time (s)');
-            ylabel('Firing rate (spike/s)')
-            title(sprintf('%s group 1: n = %d, group 2: n = %d', Disp_Type, sum(gids_1), sum(gids_2)))
+            xlim([0 4]);
+            xticks([0 2 4]);
+            xticklabels({'0', '2', '4'});
+            yticks([0 100 200]);
+            set(gca, 'Box', 'off', 'TickDir', 'out', 'LineWidth', 1, 'FontName', 'Arial', 'FontSize', 9, 'Layer', 'top');
+            if j < length(disp_bar_witdth)
+                xticklabels({});
+            else
+                xlabel('Time (s)', 'FontWeight', 'bold');
+            end
+            if q > 1
+                yticklabels({});
+            else
+                ylabel('Firing rate (spike/s)', 'FontWeight', 'bold');
+            end
+            if j == 1
+                title(sprintf('Speed %d', disp_speeds(q)), 'FontWeight', 'bold');
+            end
+            if q == 1
+                text(-0.55, 125, sprintf('W=%d', disp_bar_witdth(j)), ...
+                    'Rotation', 90, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+                    'FontName', 'Arial', 'FontSize', 9, 'FontWeight', 'bold');
+            end
+            if j == 1 && q == 1 && is_show_rf_edge_timeline
+                text(0.06, 232, sprintf('--: edge @ RF %d\x03BCm, IN.startposition=%d\x03BCm', rf_center_diameter_um, moving_bar_startposition_um), ...
+                    'FontName', 'Arial', 'FontSize', 8, 'Color', [0.2 0.2 0.2]);
+            end
         end
     end
-    sgtitle(sprintf('%s Direction: %d  Contrast: %0.2G', Disp_Type, disp_direction, 1-disp_contrast));
+    sgtitle(sprintf('%s Cells: Temporal (light) vs Nasal (dark) | Direction %d | Contrast %0.2G\nRows: bar width (\x03BCm), Columns: speed | Dashed lines: bar-edge entry/exit at RF center', Disp_Type, disp_direction, 1-disp_contrast), 'FontWeight', 'bold');
+    save_file_name = fullfile(save_folder_fig2, sprintf('MovingBar_WithinType_5x5_%s_Dir%d_Contrast%0.2G', Disp_Type, disp_direction, 1-disp_contrast));
+    print(gcf, save_file_name, '-depsc', '-painters'); % EPS format
+    print(gcf, save_file_name, '-dpng', '-r300'); % PNG, 600 dpi
 end
 
 %% within type-location Comparison (4 figures: ON-Temporal, ON-Nasal, OFF-Temporal, OFF-Nasal)
@@ -803,6 +862,306 @@ for typeIdx = 1:2
             print(gcf, save_file_name, '-dpng', '-r300');
 
         end
+    end
+end
+
+%% Quantify peak responses across speed and bar width (group heatmaps)
+Fz = 100;
+disp_direction = 0;
+disp_contrast = 0;
+disp_bar_witdth = [50, 100, 200, 400, 800];
+disp_speeds = [500, 1000, 2000, 4000, 8000];
+max_t = 459;
+is_baseline_substraction = false;
+baseline_percentile = 0.05; % Use [0,1], e.g. 0.05=5th percentile, 0.5=median
+save_folder_heatmap = '\\storage1.ris.wustl.edu\kerschensteinerd\Active\Emily\PreyCaptureRGC\Figures\illustrator';
+if ~exist(save_folder_heatmap, 'dir')
+    mkdir(save_folder_heatmap);
+end
+
+if baseline_percentile < 0 || baseline_percentile > 1
+    error('baseline_percentile must be between 0 and 1. Example: 0.05 for 5%%, 0.5 for median.');
+end
+
+if is_baseline_substraction
+    metric_label = 'BaselineSubtractedPeak';
+    metric_title = sprintf('peak - %.1f%% quantile', baseline_percentile * 100);
+else
+    metric_label = 'RawPeak';
+    metric_title = 'raw peak';
+end
+
+cell_type_numeric = cellfun(@(x) strcmpi(x, 'ON'), cell_type);
+location_type_numeric = cellfun(@(x) strcmpi(x, 'Temporal'), location);
+
+group_names = {'ON-Temporal', 'ON-Nasal', 'OFF-Temporal', 'OFF-Nasal'};
+group_masks = {
+    cell_type_numeric == 1 & location_type_numeric == 1; ...
+    cell_type_numeric == 1 & location_type_numeric == 0; ...
+    cell_type_numeric == 0 & location_type_numeric == 1; ...
+    cell_type_numeric == 0 & location_type_numeric == 0  ...
+};
+
+n_width = numel(disp_bar_witdth);
+n_speed = numel(disp_speeds);
+
+peak_by_cell = nan(n_width, n_speed, num_set);
+
+for k = 1:num_set
+    dir_id = find(Data{k}.dim1_moving_direction == disp_direction, 1);
+    ctr_id = find(Data{k}.dim2_contrast == disp_contrast, 1);
+    if isempty(dir_id) || isempty(ctr_id)
+        continue;
+    end
+
+    for j = 1:n_width
+        bw_id = find(Data{k}.dim3_bar_width == disp_bar_witdth(j), 1);
+        if isempty(bw_id)
+            continue;
+        end
+
+        for q = 1:n_speed
+            sp_id = find(Data{k}.dim4_speeds == disp_speeds(q), 1);
+            if isempty(sp_id)
+                continue;
+            end
+
+            trial_data = squeeze(Data{k}.Data(dir_id, ctr_id, bw_id, sp_id, :, :));
+            peak_by_cell(j, q, k) = compute_recording_peak_metric(trial_data, max_t, is_baseline_substraction, baseline_percentile);
+        end
+    end
+end
+
+% Temporal vs Nasal statistics at each width-speed cell (within ON and within OFF)
+% Type index: 1=ON, 2=OFF
+p_raw_by_type = nan(n_width, n_speed, 2);
+p_fdr_by_type = nan(n_width, n_speed, 2);
+sig_markers_by_type = cell(n_width, n_speed, 2);
+n_temporal_by_type = zeros(n_width, n_speed, 2);
+n_nasal_by_type = zeros(n_width, n_speed, 2);
+
+for type_idx = 1:2
+    if type_idx == 1
+        temporal_mask = cell_type_numeric == 1 & location_type_numeric == 1;
+        nasal_mask = cell_type_numeric == 1 & location_type_numeric == 0;
+    else
+        temporal_mask = cell_type_numeric == 0 & location_type_numeric == 1;
+        nasal_mask = cell_type_numeric == 0 & location_type_numeric == 0;
+    end
+
+    p_vec = nan(n_width*n_speed, 1);
+    vec_idx = 0;
+    for j = 1:n_width
+        for q = 1:n_speed
+            vec_idx = vec_idx + 1;
+            vals_temporal = squeeze(peak_by_cell(j, q, temporal_mask));
+            vals_nasal = squeeze(peak_by_cell(j, q, nasal_mask));
+            vals_temporal = vals_temporal(~isnan(vals_temporal));
+            vals_nasal = vals_nasal(~isnan(vals_nasal));
+            n_temporal_by_type(j, q, type_idx) = numel(vals_temporal);
+            n_nasal_by_type(j, q, type_idx) = numel(vals_nasal);
+
+            if numel(vals_temporal) >= 2 && numel(vals_nasal) >= 2
+                p_raw_by_type(j, q, type_idx) = ranksum(vals_temporal, vals_nasal);
+                p_vec(vec_idx) = p_raw_by_type(j, q, type_idx);
+            end
+        end
+    end
+
+    p_fdr_vec = fdr_bh_builtin(p_vec);
+    vec_idx = 0;
+    for j = 1:n_width
+        for q = 1:n_speed
+            vec_idx = vec_idx + 1;
+            p_fdr_by_type(j, q, type_idx) = p_fdr_vec(vec_idx);
+            sig_markers_by_type{j, q, type_idx} = p_to_marker(p_fdr_vec(vec_idx));
+        end
+    end
+end
+
+% Console report for temporal vs nasal stats
+fprintf('\n=== Temporal vs Nasal stats on heatmap cells (%s) ===\n', metric_label);
+for type_idx = 1:2
+    if type_idx == 1
+        type_label = 'ON';
+    else
+        type_label = 'OFF';
+    end
+    fprintf('\n[%s] width_um  speed_um_s  n_temporal  n_nasal    p_raw      p_fdr   sig\n', type_label);
+    for j = 1:n_width
+        for q = 1:n_speed
+            p_raw_val = p_raw_by_type(j, q, type_idx);
+            p_fdr_val = p_fdr_by_type(j, q, type_idx);
+            sig_mark = sig_markers_by_type{j, q, type_idx};
+            if isempty(sig_mark)
+                sig_mark = '';
+            end
+            fprintf('%8d %11d %11d %8d %10.3g %10.3g   %s\n', ...
+                disp_bar_witdth(j), disp_speeds(q), ...
+                n_temporal_by_type(j, q, type_idx), n_nasal_by_type(j, q, type_idx), ...
+                p_raw_val, p_fdr_val, sig_mark);
+        end
+    end
+end
+
+peak_heatmap_group = nan(n_width, n_speed, numel(group_names));
+peak_count_group = zeros(n_width, n_speed, numel(group_names));
+
+for g = 1:numel(group_names)
+    gids = group_masks{g};
+    if ~any(gids)
+        continue;
+    end
+
+    for j = 1:n_width
+        for q = 1:n_speed
+            vals = squeeze(peak_by_cell(j, q, gids));
+            peak_heatmap_group(j, q, g) = mean(vals, 'omitnan');
+            peak_count_group(j, q, g) = sum(~isnan(vals));
+        end
+    end
+
+    fig = figure('Name', sprintf('Peak heatmap %s (%s)', group_names{g}, metric_label));
+    imagesc(peak_heatmap_group(:, :, g));
+    set(gca, 'YDir', 'normal');
+    colormap(parula);
+    cb = colorbar;
+    caxis([50 210]);
+    cb.Ticks = [50, 100, 150, 200];
+    cb.TickLabels = {'50', '100', '150', '200'};
+
+    xticks(1:n_speed);
+    xticklabels(arrayfun(@num2str, disp_speeds, 'UniformOutput', false));
+    yticks(1:n_width);
+    yticklabels(arrayfun(@num2str, disp_bar_witdth, 'UniformOutput', false));
+
+    xlabel('Speed');
+    ylabel('Bar width');
+    title(sprintf('%s: mean %s (n=%d)', group_names{g}, metric_title, sum(gids)));
+
+    % Overlay significance markers (Temporal vs Nasal, FDR-corrected)
+    if g <= 2
+        type_idx = 1; % ON
+    else
+        type_idx = 2; % OFF
+    end
+    for j = 1:n_width
+        for q = 1:n_speed
+            mark = sig_markers_by_type{j, q, type_idx};
+            if ~isempty(mark)
+                text(q, j, mark, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+                    'Color', 'k', 'FontWeight', 'bold', 'FontSize', 11);
+            end
+        end
+    end
+
+    save_name = sprintf('MovingBar_PeakHeatmap_%s_%s', metric_label, strrep(group_names{g}, '-', '_'));
+    save_file_path = fullfile(save_folder_heatmap, save_name);
+    print(gcf, save_file_path, '-depsc', '-painters'); % EPS format
+    print(gcf, save_file_path, '-dpng', '-r300'); % PNG, 300 dpi
+end
+
+save(fullfile(save_fig_folder, sprintf('MovingBar_PeakHeatmap_Data_%s.mat', metric_label)), ...
+    'peak_by_cell', 'peak_heatmap_group', 'peak_count_group', ...
+    'p_raw_by_type', 'p_fdr_by_type', 'sig_markers_by_type', ...
+    'n_temporal_by_type', 'n_nasal_by_type', ...
+    'disp_bar_witdth', 'disp_speeds', 'group_names', 'group_masks', ...
+    'disp_direction', 'disp_contrast', 'max_t', 'Fz', ...
+    'is_baseline_substraction', 'baseline_percentile', 'metric_label', 'metric_title');
+
+function recording_metric = compute_recording_peak_metric(trial_data, max_t, is_baseline_substraction, baseline_percentile)
+    if isempty(trial_data)
+        recording_metric = nan;
+        return;
+    end
+
+    if isvector(trial_data)
+        traces = trial_data(:)';
+    else
+        if size(trial_data, 1) <= size(trial_data, 2)
+            traces = trial_data;
+        else
+            traces = trial_data';
+        end
+    end
+
+    trace_end = min(max_t, size(traces, 2));
+    if trace_end < 1
+        recording_metric = nan;
+        return;
+    end
+
+    traces = traces(:, 1:trace_end);
+    trial_metrics = nan(size(traces, 1), 1);
+
+    for t = 1:size(traces, 1)
+        tr = traces(t, :);
+        tr = tr(~isnan(tr));
+        if isempty(tr)
+            continue;
+        end
+
+        peak_val = max(tr);
+        if is_baseline_substraction
+            baseline_val = prctile(tr, baseline_percentile * 100);
+            trial_metrics(t) = peak_val - baseline_val;
+        else
+            trial_metrics(t) = peak_val;
+        end
+    end
+
+    recording_metric = mean(trial_metrics, 'omitnan');
+end
+
+function p_fdr = fdr_bh_builtin(p_raw)
+    p_fdr = nan(size(p_raw));
+    valid = ~isnan(p_raw);
+    if ~any(valid)
+        return;
+    end
+
+    if exist('mafdr', 'file') == 2
+        p_fdr(valid) = mafdr(p_raw(valid), 'BHFDR', true);
+    else
+        warning('mafdr not found. Falling back to internal BH implementation.');
+        p_fdr = fdr_bh_fallback(p_raw);
+    end
+end
+
+function p_fdr = fdr_bh_fallback(p_raw)
+    p_fdr = nan(size(p_raw));
+    valid = ~isnan(p_raw);
+    if ~any(valid)
+        return;
+    end
+
+    pv = p_raw(valid);
+    m = numel(pv);
+    [p_sorted, order] = sort(pv(:));
+    q_sorted = p_sorted .* (m ./ (1:m)');
+    q_sorted = min(1, q_sorted);
+
+    for i = m-1:-1:1
+        q_sorted(i) = min(q_sorted(i), q_sorted(i+1));
+    end
+
+    qv = nan(size(pv));
+    qv(order) = q_sorted;
+    p_fdr(valid) = qv;
+end
+
+function marker = p_to_marker(p_fdr)
+    marker = '';
+    if isnan(p_fdr)
+        return;
+    end
+
+    if p_fdr < 0.001
+        marker = '***';
+    elseif p_fdr < 0.01
+        marker = '**';
+    elseif p_fdr < 0.05
+        marker = '*';
     end
 end
 

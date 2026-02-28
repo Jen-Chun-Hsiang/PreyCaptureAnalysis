@@ -8,15 +8,11 @@
 % Example groups: 'DN_ONSus_RF_UV', 'DN_ONSus_RF_GRN'
 
 clc; close all;
-if ~exist('light_type', 'var')
-    light_type = 'GRN';  % 'GRN' or 'UV'
-end
-if ~exist('percent_peak', 'var')
-    percent_peak = 0.85;
-end
-if ~exist('show_individual_traces', 'var')
-    show_individual_traces = false;  % true: individual tuning curves; false: mean±SEM shaded plot
-end
+
+light_type = 'UV';  % 'GRN' or 'UV' % main figure 'GRN', supp figure 'UV'
+percent_peak = 0.85;
+show_individual_traces = false;  % true: individual tuning curves; false: mean±SEM shaded plot
+
 
 % Save figure folder
 save_fig_folder = './Figures/SpotSizeSimple_byWavelength/';
